@@ -14,7 +14,7 @@ batch9 <- read.csv('pilotRowOcclusion2/data/jatos_results_data_batch1.csv', sep 
 df <- bind_rows(batch6,batch7,batch8,batch9)
 
 # tidy
-raw_df2 <- df %>%
+raw_df <- df %>%
   dplyr::filter(trial_type=='noisyLetter'& (test_part=='test1' | test_part=='test2')) %>%
   dplyr::select(PROLIFIC_PID, RT, hide_proportion, present, correct, confidence, response, presence_key) %>%
   dplyr::rename(subj_id=PROLIFIC_PID) %>%
@@ -139,9 +139,9 @@ conf_occlusion_response <- inner_join(
 t.test(conf_occlusion_response$conf_occlusion_response)
 
 # general accuracy measures 
-accuracy_occlusion <- task_df2 %>%
+accuracy_occlusion <- task_df %>%
   dplyr::group_by(subj_id, hide_proportion) %>%
-  summarise(
+  dplyr::summarise(
     hit_rate = (sum(correct & present)+0.5)/(sum(present)+1),
     fa_rate = (sum(!correct & !present)+0.5)/(sum(!present)+1),
     d = qnorm(hit_rate)-qnorm(fa_rate),
@@ -283,3 +283,4 @@ overall_accuracy <- task_df %>%
     labs(x = "Hide Proportion", y = "Rate", color = "Hit / False alarm rate") +
     scale_color_manual(values = c("fa_rate" = "red", "hit_rate" = "blue")) +
     theme_bw())
+
