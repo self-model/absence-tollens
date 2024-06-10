@@ -96,6 +96,48 @@ RT_occlusion_response <- inner_join(
   mutate(RT_occlusion_response = RT_occlusion_presence - RT_occlusion_absence)
 t.test(RT_occlusion_response$RT_occlusion_response)
 
+# effect of presence/absence on confidence
+response_confidence <- task_df %>%
+  dplyr::filter(correct == TRUE) %>%
+  dplyr::group_by(subj_id, present) %>%
+  dplyr::summarise(confidence=mean(confidence)) %>%
+  tidyr::pivot_wider(names_from = present, values_from = confidence) %>%
+  dplyr::mutate(response_confidence = `1` - `0`)
+t.test(response_confidence$response_confidence)
+mean(response_confidence$`0`)
+mean(response_confidence$`1`)
+
+# occlusion effect on confidence in presence
+conf_occlusion_presence <- task_df %>%
+  dplyr::filter(present == 1 & correct == TRUE) %>%
+  dplyr::group_by(subj_id, hide_proportion) %>%
+  dplyr::summarise(confidence = mean(confidence)) %>%
+  tidyr::pivot_wider(names_from = hide_proportion, values_from = confidence) %>%
+  dplyr::mutate(conf_occlusion_presence = `0.35` - `0.1`)
+t.test(conf_occlusion_presence$conf_occlusion_presence)
+mean(conf_occlusion_presence$`0.1`)
+mean(conf_occlusion_presence$`0.35`)
+
+# occlusion effect on confidence in absence
+conf_occlusion_absence <- task_df %>%
+  dplyr::filter(present == 0 & correct == TRUE) %>%
+  dplyr::group_by(subj_id, hide_proportion) %>%
+  dplyr::summarise(confidence = mean(confidence)) %>%
+  tidyr::pivot_wider(names_from = hide_proportion, values_from = confidence) %>%
+  dplyr::mutate(conf_occlusion_absence = `0.35` - `0.1`)
+t.test(conf_occlusion_absence$conf_occlusion_absence)
+mean(conf_occlusion_absence$`0.1`)
+mean(conf_occlusion_presence$`0.35`)
+
+# occlusion response interaction on confidence 
+conf_occlusion_response <- inner_join(
+  conf_occlusion_presence,
+  conf_occlusion_absence,
+  by = "subj_id") %>%
+  mutate(conf_occlusion_response = conf_occlusion_presence - conf_occlusion_absence)
+t.test(conf_occlusion_response$conf_occlusion_response)
+
+
 # difference in RT for low->high occlusion in present vs absent
 task_df2 %>%
   dplyr::group_by(present, hide_proportion) %>%
