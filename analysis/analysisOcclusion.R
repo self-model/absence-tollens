@@ -1,23 +1,59 @@
 library(tidyverse)
 library(ggplot2)
 
-setwd('C:/Users/schip/Desktop/dissertation experiments/shapesInference/experiments/pilots/pilotRowOcclusion/data')
+setwd('C:/Users/schip/Desktop/dissertation experiments/shapesInference/experiments/pilots')
 
-# load df
-df5 <- read.csv('jatos_results_data_firstparticipant.csv', sep = ",", header = TRUE) 
+# read-in data from letter task 
+batch6 <- read.csv('pilotRowOcclusion1b/data/jatos_results_data_batch2.csv', sep = ",", header = TRUE) 
+batch7 <- read.csv('pilotRowOcclusion1c/data/jatos_results_data_batch1.csv', sep = ",", header = TRUE)
+batch8 <- read.csv('pilotRowOcclusion1d/data/jatos_results_data_batch1.csv', sep = ",", header = TRUE)
+batch9 <- read.csv('pilotRowOcclusion2/data/jatos_results_data_batch1.csv', sep = ",", header = TRUE)
 
-task_df2 <- df5 %>%
+# bind data
+df2 <- bind_rows(batch6,batch7,batch8,batch9)
+
+# tidy
+raw_df2 <- df2 %>%
   dplyr::filter(trial_type=='noisyLetter'& (test_part=='test1' | test_part=='test2')) %>%
-  dplyr::select(RT, hide_proportion, present, correct, confidence, confidence_RT) %>%
+  dplyr::select(PROLIFIC_PID, RT, hide_proportion, present, correct, confidence, response, presence_key) %>%
+  dplyr::rename(subj_id=PROLIFIC_PID) %>%
   dplyr::mutate(
-    subj_id = '5e9fd839311b8018f88c99eb',
     RT=as.numeric(RT),
-    confidence_RT=as.numeric(confidence_RT),
     confidence=as.numeric(confidence),
-    hide_proportion=as.factor(hide_proportion),
-    ## occlusion = as.factor(ifelse(hide_proportion == 0.10, 'low', 'high'))
-    present=as.factor(present),
+    present=as.numeric(present),
+    response = response == presence_key,
     correct = ifelse(correct == 'true', TRUE, FALSE))
+
+# exclusions
+low_accuracy <- raw_df2 %>%
+  dplyr::group_by(subj_id) %>%
+  dplyr::summarise(
+    accuracy = mean(correct)) %>%
+  dplyr::filter(accuracy<0.5) %>%
+  dplyr::pull(subj_id)
+
+too_slow <- raw_df2 %>%
+  dplyr::group_by(subj_id) %>%
+  dplyr::summarise(
+    third_quartile_RT = quantile(RT,0.75)) %>%
+  dplyr::filter(third_quartile_RT>7000) %>%
+  dplyr::pull(subj_id)
+
+too_fast <- raw_df2 %>%
+  dplyr::group_by(subj_id) %>%
+  dplyr::summarise(
+    first_quartile_RT = quantile(RT,0.25)) %>%
+  dplyr::filter(first_quartile_RT<100) %>%
+  dplyr::pull(subj_id)
+
+to_exclude <- c(
+  low_accuracy,
+  too_slow,
+  too_fast
+) %>% unique()
+
+task_df2 <- raw_df2 %>%
+  filter(!(subj_id %in% to_exclude))
 
 # global present-absent comparisons 
 # are they more confident when target = present
