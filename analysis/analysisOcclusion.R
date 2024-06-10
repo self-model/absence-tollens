@@ -55,27 +55,46 @@ to_exclude <- c(
 task_df2 <- raw_df2 %>%
   filter(!(subj_id %in% to_exclude))
 
-# global present-absent comparisons 
-# are they more confident when target = present
-task_df2 %>%
-  dplyr::group_by(present)%>%
-  dplyr::summarise(mean_confidence = mean(confidence))
+# effect of presence/absence on reaction time
+response_RT <- task_df %>%
+  dplyr::filter(RT > 100 & RT < 7000 & correct == TRUE) %>%  
+  dplyr::group_by(subj_id, present) %>%
+  dplyr::summarise(RT = median(RT)) %>%
+  tidyr::pivot_wider(names_from = present, values_from = RT) %>%
+  dplyr::mutate(response_RT = `1` - `0`)
+t.test(response_RT$response_RT)
+mean(response_RT$`0`)
+mean(response_RT$`1`)
 
-# are they faster when target = present 
-task_df2 %>%
-  dplyr::group_by(present) %>%
-  dplyr::summarise(median_RT = median(RT))
+# occlusion effect on RT in presence
+RT_occlusion_presence <- task_df %>%
+  dplyr::filter(RT > 100 & RT < 7000 & present == 1 & correct == TRUE) %>%
+  dplyr::group_by(subj_id, hide_proportion) %>%
+  dplyr::summarise(RT = median(RT))%>%
+  tidyr::pivot_wider(names_from = hide_proportion, values_from = RT) %>%
+  dplyr::mutate(RT_occlusion_presence = `0.35` - `0.1`)
+t.test(RT_occlusion_presence$RT_occlusion_presence)
+mean(RT_occlusion_presence$`0.1`)
+mean(RT_occlusion_presence$`0.35`)
 
-# accuracy? 
-task_df2 %>%
-  dplyr::group_by(present) %>%
-  dplyr::summarise(
-    total_trials = n(),
-    correct_trials = sum(correct),
-    proportion_correct = correct_trials/total_trials
-  ) 
-## this would be hit and correct rejection rate 
-## but do we want false alarms instead?
+# occlusion effect on RT in absence
+RT_occlusion_absence <- task_df %>%
+  dplyr::filter(RT > 100 & RT < 7000 & present == 0 & correct == TRUE) %>%
+  dplyr::group_by(subj_id, hide_proportion) %>%
+  dplyr::summarise(RT = median(RT)) %>%
+  tidyr::pivot_wider(names_from = hide_proportion, values_from = RT) %>%
+  dplyr::mutate(RT_occlusion_absence = `0.35` - `0.1`)
+t.test(RT_occlusion_absence$RT_occlusion_absence)
+mean(RT_occlusion_absence$`0.1`)
+mean(RT_occlusion_absence$`0.35`)
+
+# occlusion response interaction on reaction time 
+RT_occlusion_response <- inner_join(
+  RT_occlusion_presence, 
+  RT_occlusion_absence,
+  by = "subj_id") %>%
+  mutate(RT_occlusion_response = RT_occlusion_presence - RT_occlusion_absence)
+t.test(RT_occlusion_response$RT_occlusion_response)
 
 # difference in RT for low->high occlusion in present vs absent
 task_df2 %>%
