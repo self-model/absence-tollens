@@ -115,3 +115,46 @@ summary
 
 # post-hoc comparisons 
 summary(contrast(emmeans(aov_prop, "inference_type"), method = "pairwise"))
+
+# plots
+
+## RT
+(RT_plot_shapes <- task_df2_RT %>%
+    filter(RT > 100 & RT < 9000 & inference_accepted == TRUE) %>%
+    ggplot(aes(x = factor(inference_type, levels = c("MP", "AC", "DA", "MT")), 
+               y = RT,
+               fill = inference_type)) +
+    geom_boxplot() + 
+    labs(x = "Inference type", y = "RT (ms)") + 
+    theme_bw() +
+    scale_fill_brewer(palette = "Set2") +
+    theme(legend.position = "none")) 
+
+## confidence
+(conf_plot_shapes <- task_df2 %>%
+    dplyr::filter(RT > 100 & inference_accepted == TRUE) %>%
+    dplyr::group_by(subj_id, inference_type) %>%
+    ggplot(aes(x=factor(inference_type, levels = c("MP", "AC", "DA", "MT")),  
+               y=confidence,
+               fill = inference_type))+
+    geom_boxplot(na.rm = TRUE) +
+    labs(x="Inference type", y="Confidence") +
+    theme_bw() +
+    theme(legend.position="none")) +
+    scale_fill_brewer(palette="Set2")
+
+## proportion accepted 
+table.proportion_accepted <- task_df %>%
+    dplyr::filter(RT > 100) %>%
+    dplyr::select(proportion_accepted, inference_type, subj_id) %>%
+    Rmisc::summarySEwithin(idvar = "subj_id", measurevar = "proportion_accepted", withinvars = "inference_type") # summarySEwithin for SE values
+
+ggplot(data=table.proportion_accepted, 
+       aes(x=factor(inference_type, levels = c("MP", "AC", "DA", "MT")),
+           y=proportion_accepted, 
+           fill=inference_type)) +  
+  geom_bar(stat = "identity", position=position_dodge(.9)) +
+  coord_cartesian(ylim = c(0,1)) +
+  geom_errorbar(aes(ymin=proportion_accepted-se, ymax=proportion_accepted+se), width=.1, linewidth=.5, position=position_dodge(.9)) +
+  labs(x="Inference type", y="Proportion correct", fill = "Inference type") +
+  scale_fill_brewer(palette = "Set2") 
