@@ -178,50 +178,107 @@ mean(criterion$`0.1`)
 mean(criterion$`0.35`)
 
 # plots 
-## difference in RT for low->high occlusion in present vs absent
-task_df2 %>%
-  dplyr::group_by(present, hide_proportion) %>%
-  dplyr::summarise(median_RT = median(RT)) %>%
-  ggplot(aes(x=hide_proportion, y=median_RT, color=present)) +
-  geom_point() +
-  geom_line(aes(group = present)) + 
-  labs(x = "Proportion Hidden", 
-       y = "Median RT (ms)", 
-       color = "Target presence") +
-  scale_color_manual(values = c("0" = "red", "1" = "blue"),
-                     labels = c("0" = "Absent", "1" = "Present"))
 
-  ## dplyr::summarise(diff_occlusion = median_RT[hide_proportion == 0.10] - median_RT[hide_proportion == 0.35])
-  ## maybe just run a test when you have more data (check occlusion paper for what type)
+## RT
+
+### effects by subject
+(RT_plot <- task_df %>%
+    dplyr::filter(RT > 100 & RT < 7000 & correct == TRUE) %>%
+    dplyr::mutate(response = factor(ifelse(response, 'present','absent'),
+                                    levels=c('present','absent')),
+                  hide_proportion <- as.factor(hide_proportion)) %>%
+    dplyr::group_by(subj_id, hide_proportion, response) %>%
+    dplyr::summarise(RT = median(RT)) %>%
+    ggplot(aes(x=hide_proportion, y = RT, color = response, group = subj_id)) +
+    geom_point() +
+    facet_wrap(~response) +
+    geom_line() + 
+    labs(x = "Proportion Hidden", 
+         y = "Median RT (ms)") +
+    scale_color_manual(values = c("absent" = "red", "present" = "blue")) +
+    theme_bw())
+
+### overall effects 
+(RT_plot_overall <- task_df %>%
+    dplyr::filter(RT > 100 & RT < 7000 & correct == TRUE) %>%
+    dplyr::mutate(response = factor(ifelse(response, 'present','absent'),
+                                    levels=c('present','absent')),
+                  hide_proportion <- as.factor(hide_proportion)) %>%
+    dplyr::group_by(subj_id, hide_proportion, response) %>%
+    dplyr::summarise(RT = median(RT)) %>%
+    dplyr::group_by(hide_proportion, response) %>%
+    dplyr::summarise(mean_RT = mean(RT)) %>% # mean of indiv median
+    ggplot(aes(x=hide_proportion, y = mean_RT, color = response)) +
+    geom_point() +
+    geom_line(aes(group = response)) + 
+    labs(x = "Proportion Hidden", 
+         y = "RT (ms)", 
+         color = "Target presence") +
+    scale_color_manual(values = c("absent" = "red", "present" = "blue")) +
+    theme_bw())
+
+## confidence 
+
+### effects per individual 
+(confidence_plot <- task_df %>%
+    dplyr::filter(correct == TRUE) %>%
+    dplyr::mutate(response = factor(ifelse(response, 'present','absent'),
+                                    levels=c('present','absent')),
+                  hide_proportion <- as.factor(hide_proportion)) %>%
+    dplyr::group_by(subj_id, hide_proportion, response) %>%
+    dplyr::summarise(confidence = mean(confidence)) %>%
+    ggplot(aes(x=hide_proportion, y = confidence, color = response, group = subj_id)) +
+    geom_point() +
+    facet_wrap(~response) +
+    geom_line() + 
+    labs(x = "Proportion Hidden", 
+         y = "Confidence") +
+    scale_color_manual(values = c("absent" = "red", "present" = "blue")) +
+    theme_bw())
+
+### overall effects 
+(confidence_plot_overall <- task_df %>%
+    dplyr::filter(correct == TRUE) %>%
+    dplyr::mutate(response = factor(ifelse(response, 'present','absent'),
+                                    levels=c('present','absent')),
+                  hide_proportion <- as.factor(hide_proportion)) %>%
+    dplyr::group_by(hide_proportion, response) %>%
+    dplyr::summarise(confidence = mean(confidence)) %>%
+    ggplot(aes(x=hide_proportion, y = confidence, color = response)) +
+    geom_point() +
+    geom_line(aes(group = response)) + 
+    labs(x = "Proportion Hidden", 
+         y = "Confidence", 
+         color = "Target presence") +
+    scale_color_manual(values = c("absent" = "red", "present" = "blue")) +
+    theme_bw())
   
-# difference in confidence for low->occlusion in present vs absent
-task_df2 %>%
-  dplyr::group_by(present, hide_proportion) %>%
-  dplyr::summarise(mean_confidence = mean(confidence)) %>%
-  ggplot(aes(x=hide_proportion, y=mean_confidence, color=present)) +
-  geom_point() +
-  geom_line(aes(group = present)) + 
-  labs(x = "Proportion Hidden", 
-       y = "Mean confidence", 
-       color = "Target presence") +
-  scale_color_manual(values = c("0" = "red", "1" = "blue"),
-                     labels = c("0" = "Absent", "1" = "Present"))
-  
-# difference in accuracy for low->high occlusion in present vs absent
-task_df2 %>%
-  dplyr::group_by(present, hide_proportion) %>%
+## accuracy
+
+### effects per participant
+accuracy_plot <- accuracy_occlusion %>%
+  tidyr::pivot_longer(cols = c(hit_rate, fa_rate), names_to = "rate_type", values_to = "rate")
+
+(hit_fa_plot <- ggplot(accuracy_plot, aes(x=hide_proportion, y = rate, color = rate_type, group = subj_id)) +
+    geom_point() +
+    facet_wrap(~rate_type) +
+    geom_line() +
+    labs(x = "Hide Proportion", y = "Rate", color = "Hit / False alarm rate") +
+    scale_color_manual(values = c("fa_rate" = "red", "hit_rate" = "blue")) +
+    theme_bw() +
+    theme(legend.position = "none"))
+
+### effects overall 
+overall_accuracy <- task_df2 %>%
+  dplyr::group_by(hide_proportion) %>%
   dplyr::summarise(
-    total_trials = n(),
-    correct_trials = sum(correct),
-    proportion_correct = correct_trials/total_trials
-  ) %>%
-  ggplot(aes(x=hide_proportion, y=proportion_correct, color=present)) +
-  geom_point() +
-  geom_line(aes(group = present)) + 
-  labs(x = "Proportion Hidden", 
-       y = "Accuracy", 
-       color = "Target presence") +
-  scale_color_manual(values = c("0" = "red", "1" = "blue"),
-                     labels = c("0" = "Absent", "1" = "Present"))
+    hit_rate = (sum(correct & present))/(sum(present)),
+    fa_rate = (sum(!correct & !present))/(sum(!present))) %>%
+  tidyr::pivot_longer(cols = c(hit_rate, fa_rate), names_to = "rate_type", values_to = "rate")
 
-  ## again do we want false alarm rates instead? 
+(hit_fa_plot <- ggplot(overall_accuracy, aes(x=hide_proportion, y = rate, color = rate_type)) +
+    geom_point() +
+    geom_line(aes(group = rate_type)) +
+    labs(x = "Hide Proportion", y = "Rate", color = "Hit / False alarm rate") +
+    scale_color_manual(values = c("fa_rate" = "red", "hit_rate" = "blue")) +
+    theme_bw())
