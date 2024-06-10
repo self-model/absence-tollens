@@ -137,8 +137,48 @@ conf_occlusion_response <- inner_join(
   mutate(conf_occlusion_response = conf_occlusion_presence - conf_occlusion_absence)
 t.test(conf_occlusion_response$conf_occlusion_response)
 
+# general accuracy measures 
+accuracy_occlusion <- task_df2 %>%
+  dplyr::group_by(subj_id, hide_proportion) %>%
+  summarise(
+    hit_rate = (sum(correct & present)+0.5)/(sum(present)+1),
+    fa_rate = (sum(!correct & !present)+0.5)/(sum(!present)+1),
+    d = qnorm(hit_rate)-qnorm(fa_rate),
+    c = -0.5*(qnorm(hit_rate)+qnorm(fa_rate)))
 
-# difference in RT for low->high occlusion in present vs absent
+# d prime 
+dprime <- accuracy_occlusion %>%
+  dplyr::select(subj_id, hide_proportion,d) %>%
+  tidyr::pivot_wider(names_from=hide_proportion, values_from=d) %>%
+  dplyr::mutate(dprime_occlusion=`0.1`-`0.35`)
+t.test(dprime$dprime_occlusion)
+mean(dprime$`0.1`)
+mean(dprime$`0.35`)
+
+## driven by hit and fa rate so still calculate those as well
+hit_rate_occlusion <- accuracy_occlusion %>%
+  dplyr::select(subj_id,hide_proportion,hit_rate) %>%
+  tidyr::pivot_wider(names_from = hide_proportion, values_from = hit_rate) %>%
+  dplyr::mutate(hit_rate_occlusion = `0.1` - `0.35`)
+t.test(hit_rate_occlusion$hit_rate_occlusion)
+
+fa_rate_occlusion <- accuracy_occlusion %>%
+  dplyr::select(subj_id,hide_proportion,fa_rate) %>%
+  tidyr::pivot_wider(names_from = hide_proportion, values_from = fa_rate) %>%
+  dplyr::mutate(fa_rate_occlusion = `0.1` - `0.35`)
+t.test(fa_rate_occlusion$fa_rate_occlusion)
+
+# criterion 
+criterion <- accuracy_occlusion %>%
+  dplyr::select(subj_id, hide_proportion,c) %>%
+  tidyr::pivot_wider(names_from=hide_proportion, values_from=c) %>%
+  dplyr::mutate(criterion_occlusion=`0.1`-`0.35`)
+t.test(criterion$criterion_occlusion)
+mean(criterion$`0.1`)
+mean(criterion$`0.35`)
+
+# plots 
+## difference in RT for low->high occlusion in present vs absent
 task_df2 %>%
   dplyr::group_by(present, hide_proportion) %>%
   dplyr::summarise(median_RT = median(RT)) %>%
