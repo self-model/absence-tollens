@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <title>Shapes inference task</title>
+        <script src="jspsych/jspsych.js"></script>
+        <script src="p5/p5.min.js"></script>
+        <script src="jspsych/plugin-fullscreen.js"></script>
+        <script src="jspsych/plugin-html-keyboard-response.js"></script>
+        <script src="jspsych/plugin-html-slider-response.js"></script>
+        <script src="jspsych/plugin-image-keyboard-response.js"></script>
+        <script src="jspsych/plugin-instructions.js"></script>
+        <script src="jspsych/plugin-preload.js"></script>
+        <script src="jspsych/plugin-shapes.js"></script>
+        <script src="jspsych/plugin-survey-text.js"></script>
+        <script src="jatos.js"></script>
+        <link href="https://fonts.googleapis.com/css2?family=Corben&family=Quicksand&display=swap" rel="stylesheet">
+        <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Mono&display=swap" rel="stylesheet">
+        <link href="style.css" rel="stylesheet" type="text/css"></link>
+    </head>
+    <body></body>
+    <script>
+        
+        // initialise JsPsych
+        const jsPsych = initJsPsych({
+        on_finish: function() {
+        jsPsych.data.addProperties(jatos.urlQueryParameters);
+        var resultJson = jsPsych.data.get().json();
+        var resultCsv = jsPsych.data.get().csv();
+        jatos.submitResultData(resultCsv)
+            .then(()=>
+            jatos.uploadResultFile(resultJson, `${window.subject_identifier}_data_${Date.parse(Date())}.json`, jatos.startNextComponent))
+        }});
+
+        // define timeline 
+        var timeline = [];
+
+        // preload shapes for instructions
+        var preload = {
+            type: jsPsychPreload,
+            images: ['img/circle.png','img/triangle.png','img/diamond.png','img/pentagon.png','img/square.png']
+        };
+        timeline.push(preload);
+
+        // fullscreen
+        var full_screen = {
+            type: jsPsychFullscreen,
+            fullscreen_mode: true,
+            message: `<p>The experiment will switch to full screen mode when you press the button below. Please do not exit the full screen mode until the end of the experiment.</p>`
+        };
+        timeline.push(full_screen);
+
+        // instructions 
+        var format_instructions = (s) => {return(s+'<footer>Use the right arrow key on your keyboard to navigate to the next screen.</footer>')};
+
+        var instructions = {
+            type: jsPsychInstructions,
+            pages: [
+            format_instructions(`<p>Welcome!</p>
+                <p>Please read the following instructions carefully.</p>`),
+                format_instructions(`<p>Two shapes, chosen from the following selection, were drawn on a blackboard: </p>
+                    <p><div class = "row">
+                        <div class = "column">
+                            <img src="img/square.png" style="width: 100%">
+                        </div>
+                        <div class = "column">
+                            <img src="img/triangle.png" style="width: 100%">
+                        </div>
+                        <div class = "column">
+                            <img src="img/circle.png" style="width: 100%">
+                        </div>
+                        <div class = "column">
+                            <img src="img/pentagon.png" style="width: 100%">
+                        </div>
+                        <div class = "column">
+                            <img src="img/diamond.png" style="width: 100%">
+                        </div>
+                    </div></p>
+                    <p>The shapes were chosen according to the following rule: <em>if the left shape is a circle, the right shape will be a triangle</em>.</p>`),
+                format_instructions(`<p>You will see several scenarios where two shapes were drawn on the blackboard according to this rule, <em>but</em> one of the shapes will be hidden.</p>
+                    <p>Your task is to guess what the hidden shape is. It will be one of the two options presented to you underneath the blackboard.</p>
+                    <p>You will be asked to pick one of the options.</p>`),
+                format_instructions(`<p>After you make your guess, you will be asked to rate how confident you are in your decision.</p>`),
+                format_instructions(`<p>Try to answer as accurately as possible.</p>`)
+            ],
+            show_clickable_nav: false
+        };
+        timeline.push(instructions);
+
+        // trial to show shape, additionally  tag responses as correct/incorrect
+        var test = {
+            type: jsShapes,
+            left_shape: jsPsych.timelineVariable('left_shape'),
+            right_shape: jsPsych.timelineVariable('right_shape'),
+            occluder: jsPsych.timelineVariable('occluder'),
+            choices: ['s','g'],
+            on_finish: function(data){
+            }
+        };
+
+        // array with different trial types and corresponding correct responses 
+        var stimuli = [  
+            { left_shape: 'circle', right_shape: 'triangle', occluder: 'right' }, 
+            { left_shape: 'circle', right_shape:'triangle', occluder:'left' },  
+            { left_shape: 'not-circle', right_shape: 'not-triangle', occluder: 'right' }, 
+            { left_shape: 'not-circle', right_shape:'not-triangle', occluder: 'left' }
+        ];
+
+        // create little block timeline 
+        var block = {
+        timeline: [test],
+        timeline_variables: stimuli,
+        repetitions: 4,
+        randomize_order: true
+        }
+        timeline.push(block);
+
+        // ask participants for feedback 
+        var worker_comments = {
+        type: jsPsychSurveyText,
+        preamble: '<h1>Your Thoughts<h1>',
+        questions: [{
+        prompt: `We would appreciate if you could share any thoughts you had about the experiment, or anything we should take into account when analyzing your data.`,
+        pleaceholder: "your comments here",
+        rows:8,
+        columns:60,
+        name: 'worker_comments'
+        }]
+        }
+        timeline.push(worker_comments);
+
+        // thank you message 
+        var Thank_you = {
+                type: jsPsychInstructions,
+                pages: [
+                `<p>Thank you!</p>
+                <p>Your contribution will help us better understand how logical reasoning relates to perception. </p>
+                <p>Please press the right arrow key to get a completion code</p>`
+                ],
+                show_clickable_nav: false
+            };
+        timeline.push(Thank_you);
+
+        jatos.onLoad(function() {
+            jsPsych.run(timeline); 
+        });
+
+    </script>
+</html>

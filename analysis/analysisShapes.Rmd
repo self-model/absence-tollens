@@ -1,0 +1,211 @@
+---
+title: "shapes analysis"
+output:
+  pdf_document: default
+  html_document: default
+date: "2024-05-05"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+#### Read-in data 
+
+Data is saved as .csv files per batch. Bind together multiple batches of data. 
+
+```{r}
+# load libraries
+library(plyr)
+library(dplyr)
+library(ggplot2)
+library(Rmisc)
+
+# read in datasets 
+df1 <- read.csv('../experiments/pilots/pilot1/data/jatos_results_data_batch1.csv', sep = ",", header = TRUE)
+df2 <- read.csv('../experiments/pilots/pilot2/data/jatos_results_data_batch1.csv', sep = ",", header = TRUE)
+df3 <- read.csv('../experiments/pilots/pilot3/data/jatos_results_data_batch1.csv', sep = ",", header = TRUE)
+
+# combine 
+df <- bind_rows(df1,df2,df3)
+```
+
+
+#### Filter relevant content 
+
+We want to analyse only the 'test' trials, i.e., trials that use the shapes plugin (type: JsShapes). 
+
+```{r}
+task_df <- df %>%
+  dplyr::filter(trial_type=='jsShapes') %>%
+  dplyr::select(PROLIFIC_PID,shapes,occluder,options,response,RT,confidence,confidence_RT) %>%
+  dplyr::rename(subj_id=PROLIFIC_PID) %>%
+  dplyr::mutate(decision=ifelse(response==0,as.numeric(substr(options,2,2)),as.numeric(substr(options,4,4))),
+         RT=as.numeric(RT),
+         confidence=as.numeric(confidence))
+
+# v annoying to have to keep specifying the library but needed to load Rmisc so now it's got loads of conflicts so :(
+
+```
+
+
+#### Confidence by occlusion 
+
+Are participants more confident when the right side is occluded compared to the left? I.e., when reasoning from A -> C rather than C -> A? 
+
+```{r}
+task_df %>%
+  dplyr::group_by(subj_id, occluder) %>%
+  dplyr::summarise(confidence=mean(confidence, na.rm=T)) %>%
+  ggplot(aes(x=occluder,y=confidence,color=as.factor(subj_id)))+
+  geom_point()
+
+```
+
+#### Divide data by inference type 
+
+Sort the trials by type of inference - this is predetermined in the design, implemented in the parameters of the plugin. 
+
+|   Type    |  Left shape  |   Right shape   |    Occluder    |
+|:----------|-------------:|----------------:|---------------:|
+|  **MP**   |  circle      |  triangle       |  right         | 
+|  **AC**   |  circle      |  triangle       |  left          | 
+|  **DA**   |  not-circle  |  not-triangle   |  right         |
+|  **MT**   |  not-circle  |  not-triangle   |  left          |
+
+Add inference type as a variable to the data frame
+
+```{r}
+
+task_df <- task_df %>% 
+  mutate(
+    inference_type = case_when(
+      substr(shapes, 2, 2) == "0" & substr(shapes, 4, 4) == "1" & occluder == 'right' ~ 'MP',
+      substr(shapes, 2, 2) == "0" & substr(shapes, 4, 4) == "1" & occluder == 'left' ~ 'AC',
+      !(substr(shapes, 2, 2) == "0" & substr(shapes, 4, 4) == "1") & occluder == 'right' ~ 'DA',
+      !(substr(shapes, 2, 2) == "0" & substr(shapes, 4, 4) == "1") & occluder == 'left' ~ 'MT'
+      ))
+
+```
+
+#### Proportion "correct" per inference type 
+
+MP trials: correct response = 1
+AC trials: correct response = 0
+DA trials: correct response = (0,2,3,4)
+MT trials: correct response = (1,2,3,4)
+
+```{r}
+task_df <- task_df %>%
+  mutate(
+    correct_response = case_when(
+      inference_type == "MP" & decision == 1 ~ TRUE,
+      inference_type == "AC" & decision == 0 ~ TRUE,
+      inference_type == "DA" & decision %in% c(0,2,3,4) ~ TRUE,
+      inference_type == "MT" & decision %in% c(1,2,3,4) ~ TRUE,
+      TRUE ~ FALSE
+    ))
+```
+
+Proportion: 
+
+```{r}
+# inference type as factor 
+task_df$inference_type <- as.factor(task_df$inference_type)
+
+# calc proportion correct
+proportion_correct <- task_df %>%
+  dplyr::group_by(subj_id, inference_type) %>%
+  dplyr::summarise(
+    total_trials = n(),
+    correct_trials = sum(correct_response),
+    proportion_correct = correct_trials / total_trials
+  )
+
+# proportion correct by inference type with by-subject variation (just looking at output above is pretty useless bc it's all 1/4,1/2, etc. but I also don't want to completely ignore by-subject variation hence summarySEwithin)
+(table.proportion_correct <- summarySEwithin(data=proportion_correct, idvar = "subj_id", measurevar = "proportion_correct", withinvars = "inference_type"))
+
+```
+
+They're overall pretty good at this! Above chance at least. Wonder how well confidence tracks accuracy here.  
+
+Anyway plot
+
+```{r}
+# make order of inference_type not-alphabetical with "levels = etc."
+ggplot(data=table.proportion_correct, aes(x=factor(inference_type, levels = c("MP", "AC", "DA", "MT")), y=proportion_correct, fill=inference_type)) +  
+         geom_bar(stat = "identity", position=position_dodge(.9)) +
+         coord_cartesian(ylim = c(0,1)) +
+         geom_errorbar(aes(ymin=proportion_correct-se, ymax=proportion_correct+se), width=.1, linewidth=.5, position=position_dodge(.9)) +
+         ylab("Proportion correct") +
+         xlab("Inference type") +
+         theme_bw()
+```
+Suggests smaller proportion correct for MT/DA inferences compared to MP/AC
+
+#### Median RT per inference type 
+
+```{r}
+# plot median RT per inference type 
+task_df %>%
+  dplyr::group_by(subj_id, inference_type) %>%
+  dplyr::summarise(RT=median(RT)) %>%
+  ggplot(aes(x=factor(inference_type, levels = c("MP", "AC", "DA", "MT")), 
+             y=RT,
+             color=as.factor(subj_id))) +
+  geom_point() + 
+  xlab("Inference type") +
+  ylab("Median RT")
+
+```
+
+Seems to be somewhat overall slower for DA and MT? Let's crunch some numbers: 
+
+```{r}
+# median RT 
+(median_RT <- task_df %>%
+  dplyr::group_by(inference_type) %>%
+  dplyr::summarise(median_RT = median(RT)))
+
+# pairwise comparisons (but this is not median!)
+library(rstatix)
+(pairwise_t_test(task_df, RT ~ inference_type, p.adjust.method = "bonferroni")) 
+
+```
+
+Only MP seems to have significant differences with the MT/DA but at least it's something :^) 
+
+Though how informative are these comparisons? I'd say you want to look at
+
+- true vs. false: (MP+AC) vs (MT+DA)  
+- direction: (MP+DA) vs (AC+MT) -> but this is just occluder so can be done easily 
+
+Or maybe even some comparisons with *just* MT as that's our most important one (if we're still thinking about correlation with absence task). 
+
+#### Mean confidence per inference type
+
+```{r}
+task_df %>%
+  dplyr::group_by(subj_id, inference_type) %>%
+  dplyr::summarise(confidence=mean(confidence, na.rm=T)) %>%
+  ggplot(aes(x=factor(inference_type, levels = c("MP", "AC", "DA", "MT")),  
+             y=confidence,
+             color=as.factor(subj_id)))+
+  geom_point() +
+  xlab("Inference type") + 
+  ylab("Mean confidence")
+  
+```
+
+(Not gonna lie this is making my eyes hurt)
+
+```{r}
+(mean_confidence <- task_df %>%
+  dplyr::group_by(inference_type) %>%
+  dplyr::summarise(mean_confidence = mean(confidence, na.rm=T)))
+
+(pairwise_t_test(task_df, confidence ~ inference_type, p.adjust.method = "bonferroni"))
+
+```
+
+So seem to be some differences in every true-false comparison
