@@ -1,4 +1,5 @@
 library(tidyverse)
+library(dplyr)
 library(ggplot2)
 
 setwd('C:/Users/schip/Desktop/dissertation experiments/shapesInference/experiments/pilots')

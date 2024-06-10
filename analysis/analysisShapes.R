@@ -1,9 +1,28 @@
-# read-in data shapes task 
-df2 <- read.csv('shapesInference/data/jatos_results_data_batch1.csv', sep = ",", header = TRUE)
+# load libraries
+library('tidyverse')
+library('dplyr')
+library('ggplot2')
+library('afex')
+library('emmeans')
+library('Rmisc')
+
+
+# load data
+setwd('C:/Users/schip/Desktop/dissertation experiments/shapesInference/experiments/pilots')
+
+# read in data shapes task
+batch1 <- read.csv('pilot1/data/jatos_results_data_batch1.csv', sep = ",", header = TRUE)
+batch2 <- read.csv('pilot2/data/jatos_results_data_batch2.csv', sep = ",", header = TRUE)
+batch3 <- read.csv('pilot3/data/jatos_results_data_batch3.csv', sep = ",", header = TRUE)
+batch4 <- read.csv('pilot3b/data/jatos_results_data_batch1.csv', sep = ",", header = TRUE)
+batch5 <- read.csv('pilotShapes4/data/jatos_results_data_batch1.csv', sep = ",", header = TRUE)
+
+# combine 
+df2 <- bind_rows(batch1,batch2,batch3,batch4,batch5)
 
 # tidy
 raw_df2 <- df2 %>%
-  dplyr::filter(trial_type=='jsShapes') %>%
+  dplyr::filter(trial_type=='jsShapes' & rare_option == 'false') %>%
   dplyr::select(PROLIFIC_PID,shapes,occluder,options,response,RT,confidence) %>%
   dplyr::rename(subj_id=PROLIFIC_PID) %>%
   dplyr::mutate(decision=ifelse(response==0,as.numeric(substr(options,2,2)),as.numeric(substr(options,4,4))),
