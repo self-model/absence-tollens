@@ -79,3 +79,92 @@ summary(accuracy_absent_model <- lm(occlusion_accuracy_z ~ MT + MP + DA, data = 
 # error rate in presence
 summary(accuracy_present_model <- lm(occlusion_accuracy_z ~ MT + MP + DA, data = present_df, na.action=na.omit))
 
+# permutation tests comparing goodness of fit of present vs absent models for each DV 
+
+# non-parametric permutation test for present vs absent model for RT 
+get_rsquared_diff_RT <- function(df) {
+  
+  present_df <- df %>% filter(present==1);
+  absent_df <- df %>% filter(present==0);
+  
+  present_model <- lm(occlusion_RT~MT+MP+DA, data=present_df) %>%
+    summary()
+  
+  absent_model <- lm(occlusion_RT~MT+MP+DA, data=absent_df) %>%
+    summary()
+  
+  return(absent_model$r.squared-present_model$r.squared)
+}
+
+shuffle_present <- function(df) {
+  new_df <- df %>%
+    dplyr::group_by(subj_id) %>%
+    dplyr::mutate(flip = rbinom(1,1,0.5),
+                  old_present = present,
+                  present = ifelse(flip, as.integer(!present),present))
+  return(new_df)
+}
+
+true_difference_RT <- get_rsquared_diff_RT(analysis_df);
+
+N = 10000; #number of permutations
+null_dist_RT = c();
+
+for (i in 1:N) {
+  shuffled_df <- shuffle_present(analysis_df);
+  shuffled_diff_RT <- get_rsquared_diff_RT(shuffled_df);
+  null_dist_RT = c(null_dist_RT, shuffled_diff_RT);
+}
+
+(p_value_RT <- mean(abs(true_difference_RT)<=abs(null_dist_RT)))
+
+# permutation test confidence
+get_rsquared_diff_conf <- function(df) {
+  
+  present_df <- df %>% filter(present==1);
+  absent_df <- df %>% filter(present==0);
+  
+  present_model <- lm(occlusion_confidence~MT+MP+DA, data=present_df) %>% summary()
+  absent_model <- lm(occlusion_confidence~MT+MP+DA, data=absent_df) %>% summary()
+  
+  return(absent_model$r.squared-present_model$r.squared)
+}
+
+true_difference_conf <- get_rsquared_diff_conf(analysis_df);
+
+N = 10000; #number of permutations
+null_dist_conf = c();
+
+for (i in 1:N) {
+  shuffled_df <- shuffle_present(analysis_df);
+  shuffled_diff_conf <- get_rsquared_diff_conf(shuffled_df);
+  null_dist_conf = c(null_dist_conf, shuffled_diff_conf);
+}
+
+(p_value_conf <- mean(abs(true_difference_conf)<=abs(null_dist_conf)))
+
+# permutation test error rate
+get_rsquared_diff_accuracy <- function(df) {
+  
+  present_df <- df %>% filter(present==1);
+  absent_df <- df %>% filter(present==0);
+  
+  present_model <- lm(occlusion_accuracy~MT+MP+DA, data=present_df) %>% summary()
+  absent_model <- lm(occlusion_accuracy~MT+MP+DA, data=absent_df) %>% summary()
+  
+  return(absent_model$r.squared-present_model$r.squared)
+}
+
+true_difference_accuracy <- get_rsquared_diff_accuracy(analysis_df);
+
+N = 10000; 
+null_dist_accuracy = c();
+
+for (i in 1:N) {
+  shuffled_df <- shuffle_present(analysis_df);
+  shuffled_diff_accuracy <- get_rsquared_diff_accuracy(shuffled_df);
+  null_dist_accuracy = c(null_dist_accuracy, shuffled_diff_accuracy);
+}
+
+(p_value_accuracy <- mean(abs(true_difference_accuracy)<=abs(null_dist_accuracy)))
+
