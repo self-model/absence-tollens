@@ -11,10 +11,10 @@ batch8 <- read.csv('pilotRowOcclusion1d/data/jatos_results_data_batch1.csv', sep
 batch9 <- read.csv('pilotRowOcclusion2/data/jatos_results_data_batch1.csv', sep = ",", header = TRUE)
 
 # bind data
-df2 <- bind_rows(batch6,batch7,batch8,batch9)
+df <- bind_rows(batch6,batch7,batch8,batch9)
 
 # tidy
-raw_df2 <- df2 %>%
+raw_df2 <- df %>%
   dplyr::filter(trial_type=='noisyLetter'& (test_part=='test1' | test_part=='test2')) %>%
   dplyr::select(PROLIFIC_PID, RT, hide_proportion, present, correct, confidence, response, presence_key) %>%
   dplyr::rename(subj_id=PROLIFIC_PID) %>%
@@ -26,21 +26,21 @@ raw_df2 <- df2 %>%
     correct = ifelse(correct == 'true', TRUE, FALSE))
 
 # exclusions
-low_accuracy <- raw_df2 %>%
+low_accuracy <- raw_df %>%
   dplyr::group_by(subj_id) %>%
   dplyr::summarise(
     accuracy = mean(correct)) %>%
   dplyr::filter(accuracy<0.5) %>%
   dplyr::pull(subj_id)
 
-too_slow <- raw_df2 %>%
+too_slow <- raw_df %>%
   dplyr::group_by(subj_id) %>%
   dplyr::summarise(
     third_quartile_RT = quantile(RT,0.75)) %>%
   dplyr::filter(third_quartile_RT>7000) %>%
   dplyr::pull(subj_id)
 
-too_fast <- raw_df2 %>%
+too_fast <- raw_df %>%
   dplyr::group_by(subj_id) %>%
   dplyr::summarise(
     first_quartile_RT = quantile(RT,0.25)) %>%
@@ -53,7 +53,7 @@ to_exclude <- c(
   too_fast
 ) %>% unique()
 
-task_df2 <- raw_df2 %>%
+task_df <- raw_df %>%
   filter(!(subj_id %in% to_exclude))
 
 # effect of presence/absence on reaction time
@@ -270,7 +270,7 @@ accuracy_plot <- accuracy_occlusion %>%
     theme(legend.position = "none"))
 
 ### effects overall 
-overall_accuracy <- task_df2 %>%
+overall_accuracy <- task_df %>%
   dplyr::group_by(hide_proportion) %>%
   dplyr::summarise(
     hit_rate = (sum(correct & present))/(sum(present)),
