@@ -22,7 +22,7 @@ df2 <- bind_rows(batch1,batch2,batch3,batch4,batch5)
 
 # tidy
 raw_df2 <- df2 %>%
-  dplyr::filter(trial_type=='jsShapes' & rare_option == 'false') %>%
+  dplyr::filter(trial_type=='jsShapes') %>% #  & rare_option == 'false'
   dplyr::select(PROLIFIC_PID,shapes,occluder,options,response,RT,confidence) %>%
   dplyr::rename(subj_id=PROLIFIC_PID) %>%
   dplyr::mutate(decision=ifelse(response==0,as.numeric(substr(options,2,2)),as.numeric(substr(options,4,4))),
@@ -163,7 +163,7 @@ summary(contrast(emmeans(aov_prop, "inference_type"), method = "pairwise"))
     scale_fill_brewer(palette="Set2")
 
 ## proportion accepted 
-table.proportion_accepted <- task_df %>%
+table.proportion_accepted <- task_df2 %>%
     dplyr::filter(RT > 100) %>%
     dplyr::select(proportion_accepted, inference_type, subj_id) %>%
     Rmisc::summarySEwithin(idvar = "subj_id", measurevar = "proportion_accepted", withinvars = "inference_type") # summarySEwithin for SE values
