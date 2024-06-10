@@ -319,7 +319,9 @@ var jsNoisyLetter = (function (jspsych) {
               p.pop()
             }
 
-            window.presented_pixel_data.push(presented_frame);
+            if (window.frame_number < 76) {
+              window.presented_pixel_data.push(presented_frame);
+            }
             window.frame_number++
 
             p.push();
