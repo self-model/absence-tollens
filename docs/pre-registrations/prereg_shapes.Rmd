@@ -23,7 +23,7 @@ footnotelist: no
 
 classoption: "man"
 output: papaja::apa6_word
-bibliography: references.bib
+bibliography: "references.bib"
 ---
 
 ```{r setup, include = FALSE}
@@ -39,7 +39,6 @@ groundhog.library(
   ), "2024-06-09"
 )
 
-r_refs("r-references.bib")
 knitr::opts_chunk$set(echo=FALSE, message=FALSE, warning=FALSE, results='hide')
 ```
 
