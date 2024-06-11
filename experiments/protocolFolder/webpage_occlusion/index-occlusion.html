@@ -42,7 +42,7 @@
         jatos.catchAndLogErrors()
         jatos.submitResultData(resultCsv)
             .then(()=>
-            jatos.uploadResultFile(resultJson, `${window.subject_identifier}_data_${Date.parse(Date())}.json`, jatos.startNextComponent))
+            jatos.uploadResultFile(resultJson, `${jatos.workerId}_data_${Date.parse(Date())}.json`, jatos.startNextComponent))
     }});
 
 
