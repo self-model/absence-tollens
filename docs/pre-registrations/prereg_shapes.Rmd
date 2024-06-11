@@ -102,7 +102,7 @@ After receiving instructions, participants will be presented with trials where t
 
 For MP and DA trials, the choice options will consist of a triangle and a non-triangle shape; for MT and AC trials, the choice options will consist of a circle and a non-circle shape. Non-triangle shapes will be sampled uniformly from the full set of shapes, including the circle and the shape presented on the blackboard (whenever this shape is not a triangle). Similarly, non-circle shapes will be sampled uniformly from the full set of shapes, including the triangle and the shape presented on the blackboard (whenever this shape is not a circle). Immediately after deciding the identity of the hidden shape, participants will rate their confidence by moving a dial on a continuous scale. The experiment will comprise a single block of 16 trials.
 
-```{r design, echo=FALSE, fig.cap="Figure 2. Experimental design. Left: example screen. Right: example stimulus and option pairs for each inference type. Model-consistent response options are underlined in red.", out.width = '75%'}
+```{r design2, echo=FALSE, fig.cap="Figure 2. Experimental design. Left: example screen. Right: example stimulus and option pairs for each inference type. Model-consistent response options are underlined in red.", out.width = '75%'}
 knitr::include_graphics("figures/Design2.png")
 ```
 
@@ -792,3 +792,10 @@ plot(pwr)
 \newpage
 
 # References 
+
+\begingroup
+\setlength{\parindent}{-0.5in}
+\setlength{\leftskip}{0.5in}
+
+<div id="refs" custom-style="Bibliography"></div>
+\endgroup
