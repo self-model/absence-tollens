@@ -24,11 +24,22 @@
         // initialise JsPsych
         const jsPsych = initJsPsych({
         on_finish: function() {
+        jsPsych.data.addProperties(jatos.urlQueryParameters);
+        jsPsych.data.addProperties(
+            { practice_rare_shape_loops: practice_rare_shape_loop,
+              comprehension_visits: comprehension_visits
+            }
+        )
+        var resultJson = jsPsych.data.get().json();
+        var resultCsv = jsPsych.data.get().csv();
+        jatos.submitResultData(resultCsv)
+            .then(()=>
+            jatos.uploadResultFile(resultJson, `${window.subject_identifier}_data_${Date.parse(Date())}.json`, jatos.startNextComponent))
         }});
 
         practice_rare_shape_loop = 0;
         followed_rare_shape = false;
-        comprehension_visits = 0;     
+        comprehension_visits = 0;       
 
         // define timeline 
         var timeline = [];
@@ -108,7 +119,7 @@
         var block = {
         timeline: [test],
         timeline_variables: stimuli,
-        repetitions: 1,
+        repetitions: 4,
         randomize_order: true
         }
         timeline.push(block);
@@ -118,11 +129,11 @@
         type: jsPsychInstructions,
         pages: [
             format_instructions(`<p>Well done!</p>
-            <p>Now, once in a while, a star shape is drawn on the blackboard:</p> 
+            <p>Now, there is some additional information. Once in a while, a star shape was drawn on the blackboard:</p> 
             <p><div class = "row">
                 <img src="img/star.png" style="width: 15%">
             </div></p>
-            <p>However, this only happens very rarely.</p>`)
+            <p>However, this only happened very rarely.</p>`)
         ],
         show_clickable_nav: false
         }
@@ -132,7 +143,7 @@
         var multichoice_rare_shape = {
             type: jsPsychSurveyMultiChoice,
             questions: [{
-                prompt: `How likely is it a star is drawn on the blackboard?`,
+                prompt: `How likely is it a star was drawn on the blackboard?`,
                 options: ['1. Much more likely than all other shapes.',
                           '2. Much less likely than all other shapes.',
                           '3. About as likely as all other shapes.'
@@ -152,7 +163,7 @@
             pages: function() {
                 return [format_instructions(`<h1>Let's try again</h1>
                 <p>Your response to the comprehension question was incorrect. Let's try again.</p>
-                <p>Remember, the star is drawn very rarely.</p>`)]
+                <p>Remember, the star was drawn very rarely.</p>`)]
             },
             show_clickable_nav: false
         }
@@ -178,7 +189,7 @@
         var instructions2 = {
             type: jsPsychInstructions,
             pages: [
-                format_instructions(`<p>That is correct! You are now ready for one final guess.</p>
+                format_instructions(`<p>That is correct! You are now ready to make one final guess.</p>
                 <p>Remember, the rule is: <em>if the left shape is a circle, the right shape will be a triangle</em>.</p>`)
             ],
             show_clickable_nav: false
@@ -236,8 +247,9 @@
             };
         timeline.push(Thank_you);
 
-      
-        jsPsych.run(timeline); 
-      
+        jatos.onLoad(function() {
+            jsPsych.run(timeline); 
+        });
+
     </script>
 </html>

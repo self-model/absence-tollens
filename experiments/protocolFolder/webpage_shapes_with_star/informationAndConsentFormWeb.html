@@ -1,0 +1,127 @@
+
+<!doctype html>
+<html>
+<!-- <script src="https://ajax.googleapis.com/ajax/libs/jquery/1.11.1/jquery.min.js"></script> -->
+<!-- <head>
+<link href="style.css" rel="stylesheet" type="text/css"></link>
+</head> -->
+<head>
+  <script src="jatos.js"></script>
+  <script src="jquery/jquery.min.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Corben&family=Quicksand&display=swap" rel="stylesheet">
+</head>
+<title>Information and Consent Form</title>
+<body>
+<style>
+
+body {
+  background-color: rgb(128, 128,128);
+  color: white;
+  font-family: 'Quicksand', sans-serif;
+}
+
+div {
+    width: 800px;
+    margin: 50px auto 50px auto;
+    }
+
+
+
+h1 {
+text-align: center;
+font-family: tahoma;
+font-size:15pt
+}
+
+p {
+    margin-right: 150px;
+    margin-left: 50px;
+    font-family: 'Quicksand', sans-serif;
+
+}
+
+
+p.gentext {
+    line-height: 120%;
+	font-family: calibri;
+	font-size: 12pt;
+	margin-right: 50px;
+	margin-left: 50px;
+	align: justify;
+}
+
+</style>
+<div>
+
+<h1><b><center>Information and Consent Form</center></b></h1><br>
+    
+<br><br>
+
+<strong><em>General Information </em></strong>
+
+<p>The aim of this research is to investigate the mechanisms underlying the way we make perceptual decisions.</p>
+<p>We appreciate your interest in participating in this online task. You have been invited to participate as you are 18 years old or above and fluent in English. Please read through this information before agreeing to participate (if you wish to) by ticking the ‘yes’ box below.</p>
+<p>The Principal Researcher is Maya Schipper, who is attached to the Department of Experimental Psychology at the University of Oxford. This research is being completed under the supervision of Matan Mazor.</p>
+<p>You will be asked to make a series of decisions and judgments about what you see or read. This should take about 10-20 minutes. No background knowledge is required. We will collect data on your decisions, subjective confidence and decision times, which will be used in our investigation into the way people make perceptual decisions. We will not collect data your name or IP address, but we will retrieve your demographic data from Prolific. Non-identifiable research data will be openly shared with the scientific community in an online database.  </p>
+
+<strong><em>Do I have to take part? </em></strong>
+
+<p>No. Please note that participation is voluntary. If you do decide to take part, you may withdraw at any point for any reason before submitting your answers by pressing the ‘Exit’ button/ closing the browser. </p>
+
+<strong><em>How will my data be used? </em></strong>
+
+<p>The data we will retrieve from Prolific that could identify you will be your age, gender, first language, country of birth, country of residence, nationality, ethnicity, student status and employment status. We will use information about your age and gender in our analyses. All other demographic information will be immediately deleted from our server and will not be used or shared by us. </p>
+<p>Your IP address will not be stored. We will take all reasonable measures to ensure that data remain confidential.</p>
+<p>The responses you provide will be stored in a password-protected electronic file on University of Oxford secure servers and may be used in academic publications and conference presentations. In case data will be used as part of a master’s thesis, a copy of the thesis will be deposited both in print and online in the Oxford University Research Archive where it will be publicly available to facilitate its use in future research. </p>
+
+<strong><em>Who will have access to my data?</em></strong>
+
+<p>The University of Oxford is the data controller with respect to your personal data and, as such, will determine how your personal data is used in the research. The University will process your personal data for the purpose of the research outlined above. Research is a task that we perform in the public interest. Further information about your rights with respect to your personal data is available from https://compliance.admin.ox.ac.uk/individual-rights. </p>
+<p>We would like to use the data in future studies, and to share data with other researchers (e.g. in online databases). Data will have identifying information removed before it is shared with other researchers or results are made public.</p>
+<p>The results will be written up for an MSc degree.</p>
+
+<strong><em>Who has reviewed this research? </em></strong>
+<p>This research has been reviewed by, and received ethics clearance through, a subcommittee of the University of Oxford Central University Research Ethics Committee, Ethics Approval Reference: R91912/RE001.</p>
+
+<strong><em>Who do I contact if I have a concern or I wish to complain? </em></strong>
+<p>If you have a concern about any aspect of this research, please contact maya.schipper@lmh.ox.ac.uk or matan.mazor@all-souls.ox.ac.uk , and we will do our best to answer your query. We will acknowledge your concern within 10 working days and give you an indication of how it will be dealt with. If you remain unhappy or wish to make a formal complaint, please contact the University of Oxford Research Governance, Ethics & Assurance (RGEA) team at rgea.complaints@admin.ox.ac.uk or on 01865 616480.</p>
+
+<strong><em>Please note that you may only participate in this experiment if you are 18 years of age or over</em></strong><br></br>
+
+    <input type="checkbox" id="age_checkbox"/>I certify that I am 18 years of age or over.<br></br>
+
+<strong><em> If you have read the information above and agree to participate with the understanding that the data (including any personal data) you submit will be processed accordingly, please tick below to start. </em></strong><br></br>
+
+    <input type="checkbox" id="consent_checkbox"/>Yes, I agree to take part.
+    <br></br><center>
+    <button type="button" id="Start">Start!</button></center>
+    </p>
+    
+    <script type="text/javascript">
+            jatos.onLoad(function() {
+                    $("#text").html(jatos.componentJsonInput.text);
+                    $("#consent_checkbox").show();
+                    $("#Start").show();
+            });
+    
+            $('#Start').click(function() {
+                    if ($('#consent_checkbox').prop('checked')) {
+                        var result = "Consent given.";
+                        jatos.submitResultData(result, jatos.startNextComponent);
+                    }
+            });
+    
+            $('#cancelButton').click(function() {
+                    jatos.abortStudy("Consent not given.");
+            });
+
+</script>
+
+</div>
+
+
+
+
+	</body>
+
+</html>
