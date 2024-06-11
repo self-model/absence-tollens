@@ -4,6 +4,7 @@
     <title>Noisy letters</title>
     <script src="jspsych/jspsych.js"></script>
     <script src="p5/p5.min.js"></script>
+    <script src="mersenne-twister.js"></script>
     <script src="jspsych/plugin-fullscreen.js"></script>
     <script src="jspsych/plugin-preload.js"></script>
     <script src="jspsych/plugin-instructions.js"></script>
@@ -17,6 +18,7 @@
     <script src="jatos.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=Corben&family=Quicksand&display=swap" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Mono&display=swap" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.0.0/crypto-js.min.js"></script>
     <link href="style.css" rel="stylesheet" type="text/css"></link>
 
   </head>
@@ -544,11 +546,29 @@
       return array;
     }
 
-    window.timeline = makeTimeline()
+    function hexToBytes(hex) {
+      for (var bytes = [], c = 0; c < hex.length; c += 2)
+      bytes.push(parseInt(hex.substr(c, 2), 16));
+      return bytes;
+    };
 
-    jatos.onLoad(function() {
-        jsPsych.run(window.timeline); 
-        });
+      /* start the experiment */
+    jatos.onLoad(function () {
+      var m = new MersenneTwister();
+      Math.random = function() {return m.random()};
+      var protocol_sum = jatos.batchSession.get("protocol_sum");
+      console.log(protocol_sum)
+      var subject_identifier = jatos.workerId;
+      subject_sum = hexToBytes(
+        CryptoJS.SHA256(
+          protocol_sum+subject_identifier).toString()
+      );
+      m.init_by_array(subject_sum, subject_sum.length);
+      jsPsych.data.addProperties({'protocol_sum':protocol_sum,
+      'subject_identifier':subject_identifier, 'subject_sum':subject_sum});
+      timeline=makeTimeline();
+      jsPsych.run(timeline);
+    });
 
   </script>
 </html>
