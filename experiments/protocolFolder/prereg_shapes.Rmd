@@ -119,10 +119,10 @@ For the letter-detection task, participants will be excluded if their accuracy f
 
 ```{r}
 # read-in data 
-batch1 <- read.csv('../../experiments/pilots/pilot_occlusion/data/jatos_results_data_batch1.csv', sep = ",", header = TRUE) 
-batch2 <- read.csv('../../experiments/pilots/pilot_occlusion/data/jatos_results_data_batch2.csv', sep = ",", header = TRUE)
-batch3 <- read.csv('../../experiments/pilots/pilot_occlusion/data/jatos_results_data_batch3.csv', sep = ",", header = TRUE)
-batch4 <- read.csv('../../experiments/pilots/pilot_occlusion/data/jatos_results_data_batch4.csv', sep = ",", header = TRUE)
+batch1 <- read.csv('../experiments/pilots/pilot_occlusion/data/jatos_results_data_batch1.csv', sep = ",", header = TRUE) 
+batch2 <- read.csv('../experiments/pilots/pilot_occlusion/data/jatos_results_data_batch2.csv', sep = ",", header = TRUE)
+batch3 <- read.csv('../experiments/pilots/pilot_occlusion/data/jatos_results_data_batch3.csv', sep = ",", header = TRUE)
+batch4 <- read.csv('../experiments/pilots/pilot_occlusion/data/jatos_results_data_batch4.csv', sep = ",", header = TRUE)
 
 # bind data
 df <- bind_rows(batch1,batch2,batch3,batch4)
@@ -176,11 +176,11 @@ For the shapes-inference task, participants will be excluded if they fail to mak
 
 ```{r}
 # read in data shapes task
-batch5 <- read.csv('../../experiments/pilots/pilot_shapes/data/jatos_results_data_batch1.csv', sep = ",", header = TRUE)
-batch6 <- read.csv('../../experiments/pilots/pilot_shapes/data/jatos_results_data_batch2.csv', sep = ",", header = TRUE)
-batch7 <- read.csv('../../experiments/pilots/pilot_shapes/data/jatos_results_data_batch3.csv', sep = ",", header = TRUE)
-batch8 <- read.csv('../../experiments/pilots/pilot_shapes/data/jatos_results_data_batch4.csv', sep = ",", header = TRUE)
-batch9 <- read.csv('../../experiments/pilots/pilot_shapes/data/jatos_results_data_batch5.csv', sep = ",", header = TRUE)
+batch5 <- read.csv('../experiments/pilots/pilot_shapes/data/jatos_results_data_batch1.csv', sep = ",", header = TRUE)
+batch6 <- read.csv('../experiments/pilots/pilot_shapes/data/jatos_results_data_batch2.csv', sep = ",", header = TRUE)
+batch7 <- read.csv('../experiments/pilots/pilot_shapes/data/jatos_results_data_batch3.csv', sep = ",", header = TRUE)
+batch8 <- read.csv('../experiments/pilots/pilot_shapes/data/jatos_results_data_batch4.csv', sep = ",", header = TRUE)
+batch9 <- read.csv('../experiments/pilots/pilot_shapes/data/jatos_results_data_batch5.csv', sep = ",", header = TRUE)
 
 # combine 
 df2 <- bind_rows(batch5,batch6,batch7,batch8,batch9)
