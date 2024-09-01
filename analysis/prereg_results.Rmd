@@ -1,0 +1,876 @@
+---
+title: "Correlates of individual differences in perceptual decision-making"
+shorttitle: "Individual differences in perceptual decision-making"
+
+author: 
+  - name: "Maya Schipper"
+    affiliation: "1"
+  - name: "Matan Mazor"
+    affiliation: "1"
+
+affiliation:
+  - id: "1"
+    institution: "University of Oxford"
+
+floatsintext: no
+linenumbers: yes
+draft: no
+mask: no
+
+figurelist: no
+tablelist: no
+footnotelist: no
+
+classoption: "man"
+output: papaja::apa6_word
+bibliography: "references.bib"
+---
+
+```{r setup, include = FALSE}
+library('papaja')
+library('pwr')
+library('tidyverse')
+library('emmeans')
+library('afex')
+library('dplyr')
+library('gridExtra')
+knitr::opts_chunk$set(echo=FALSE, message=FALSE, warning=FALSE)
+```
+
+```{r analysis-preferences}
+# Seed for random number generation
+set.seed(42) 
+knitr::opts_chunk$set(cache.extra = knitr::rand_seed)
+```
+
+```{r load tidy and exclusions}
+
+# read-in data 
+batch1 <- read.csv('experiments/ExpOcclusion/data/jatos_results_data_batch1.csv', sep = ",", header = TRUE) 
+batch2 <- read.csv('experiments/ExpOcclusion/data/jatos_results_data_batch2.csv', sep = ",", header = TRUE)
+batch3 <- read.csv('experiments/ExpOcclusion/data/jatos_results_data_batch3.csv', sep = ",", header = TRUE)
+
+# bind data
+df <- bind_rows(batch1,batch2,batch3)
+
+# tidy 
+raw_df <- df %>%
+  dplyr::filter(trial_type=='noisyLetter'& (test_part=='test1' | test_part=='test2')) %>%
+  dplyr::select(PROLIFIC_PID, RT, hide_proportion, present, correct, confidence, response, presence_key) %>%
+  dplyr::rename(subj_id=PROLIFIC_PID) %>%
+  dplyr::mutate(
+    RT=as.numeric(RT),
+    confidence=as.numeric(confidence),
+    present=as.numeric(present),
+    response = response == presence_key,
+    correct = ifelse(correct == 'true', TRUE, FALSE))
+
+# exclusions
+low_accuracy <- raw_df %>%
+  dplyr::group_by(subj_id) %>%
+  dplyr::summarise(
+    accuracy = mean(correct)) %>%
+  dplyr::filter(accuracy<0.5) %>%
+  dplyr::pull(subj_id)
+
+too_slow <- raw_df %>%
+  dplyr::group_by(subj_id) %>%
+  dplyr::summarise(
+    third_quartile_RT = quantile(RT,0.75)) %>%
+  dplyr::filter(third_quartile_RT>7000) %>%
+  dplyr::pull(subj_id)
+
+too_fast <- raw_df %>%
+  dplyr::group_by(subj_id) %>%
+  dplyr::summarise(
+    first_quartile_RT = quantile(RT,0.25)) %>%
+  dplyr::filter(first_quartile_RT<100) %>%
+  dplyr::pull(subj_id)
+
+to_exclude <- c(
+  low_accuracy,
+  too_slow,
+  too_fast
+) %>% unique()
+
+task_df <- raw_df %>%
+  filter(!(subj_id %in% to_exclude))
+
+# read in data shapes task
+batch4 <- read.csv('experiments/ExpShapes/data/jatos_results_data_batch1.csv', sep = ",", header = TRUE)
+batch5 <- read.csv('experiments/ExpShapes/data/jatos_results_data_batch2.csv', sep = ",", header = TRUE)
+
+# combine 
+df2 <- bind_rows(batch4,batch5)
+
+# tidy
+raw_df2 <- df2 %>%
+  dplyr::filter(trial_type=='jsShapes' & rare_option == 'false') %>%  # NOT LOOKING AT STAR TRIALS 
+  dplyr::select(PROLIFIC_PID,shapes,occluder,options,response,RT,confidence) %>%
+  dplyr::rename(subj_id=PROLIFIC_PID) %>%
+  dplyr::mutate(decision=ifelse(response==0,as.numeric(substr(options,2,2)),as.numeric(substr(options,4,4))),
+                RT=as.numeric(RT),
+                confidence=as.numeric(confidence))
+
+# add inference type
+raw_df2 <- raw_df2 %>% 
+  dplyr::mutate(
+    inference_type = case_when(
+      substr(shapes, 2, 2) == "0" & substr(shapes, 4, 4) == "1" & occluder == 'right' ~ 'MP',
+      substr(shapes, 2, 2) == "0" & substr(shapes, 4, 4) == "1" & occluder == 'left' ~ 'AC',
+      !(substr(shapes, 2, 2) == "0" & substr(shapes, 4, 4) == "1") & occluder == 'right' ~ 'DA',
+      !(substr(shapes, 2, 2) == "0" & substr(shapes, 4, 4) == "1") & occluder == 'left' ~ 'MT'
+    ))
+
+# specify inference "accepted" 
+raw_df2 <- raw_df2 %>%
+  dplyr::mutate(
+    inference_accepted = case_when(
+      inference_type == "MP" & decision == 1 ~ TRUE,
+      inference_type == "AC" & decision == 0 ~ TRUE,
+      inference_type == "DA" & decision %in% c(0,2,3,4) ~ TRUE,
+      inference_type == "MT" & decision %in% c(1,2,3,4) ~ TRUE,
+      TRUE ~ FALSE
+    ))
+raw_df2$inference_type <- as.factor(raw_df2$inference_type)
+
+# calculate proportion accepted
+proportion_accepted <- raw_df2 %>%
+  dplyr::group_by(subj_id, inference_type) %>%
+  dplyr::summarise(
+    proportion_accepted = sum(inference_accepted)/n()
+  )
+raw_df2 <- raw_df2 %>%
+  left_join(proportion_accepted, by = c("subj_id", "inference_type"))
+
+# low accuracy
+low_accuracy_shapes <- raw_df2 %>%
+  dplyr::filter(inference_type == "MP" & proportion_accepted < 0.75 ) %>%
+  dplyr::pull(subj_id)  
+
+# too fast 
+too_fast_shapes <- raw_df2 %>%
+  dplyr::group_by(subj_id) %>%
+  dplyr::summarise(
+    first_quartile_RT = quantile(RT,0.25)) %>%
+  dplyr::filter(first_quartile_RT<100) %>%
+  dplyr::pull(subj_id)
+
+# exclusions for analysis
+to_exclude_shapes <- c(low_accuracy_shapes,too_fast_shapes) %>% unique()
+task_df2 <- raw_df2 %>%
+  filter(!(subj_id %in% to_exclude_shapes))
+
+# extra exclusions for RT analysis
+too_slow_shapes <- raw_df2 %>%
+  dplyr::group_by(subj_id) %>%
+  dplyr::summarise(
+    third_quantile_RT = quantile(RT,0.75)) %>%
+  dplyr::filter(third_quantile_RT>9000) %>%
+  dplyr::pull(subj_id)
+
+to_exclude_shapes_RT <- c(low_accuracy_shapes, too_fast_shapes, too_slow_shapes) %>% unique()
+
+task_df2_RT <- raw_df2 %>%
+  filter(!(subj_id %in% to_exclude_shapes_RT)) 
+
+```
+
+
+### Participants
+
+`r raw_df$subj_id%>%unique()%>%length()` participants took part in the letter-detection task. Participants were excluded if their accuracy fell below 50% (0 participants). We also excluded participants if they had extremely fast (`r too_fast%>%length()` participants) or slow (`r too_slow%>%length()` participants) reaction times in this task (below 100 milliseconds or above 7 seconds in more than 25% of the trials). Trials with reaction times below 100 milliseconds (`r (raw_df%>%filter(RT<100)%>%nrow()/raw_df%>%filter(RT>0)%>%nrow())%>%printnum()` of all trials) or above 7 seconds (`r (raw_df%>%filter(RT>7000)%>%nrow()/raw_df%>%filter(RT>0)%>%nrow())%>%printnum()` of all trials) were excluded from the reaction time analysis.
+
+`r raw_df2$subj_id%>%unique()%>%length()` participants took part in the shapes-inference task. Participants were excluded if they failed to make the MP inference 2 out of 4 times or more (`r low_accuracy_shapes%>%length() / 4` participants). As the rule is on the screen for every trial, repeated failure to make this inference is likely a sign of inattentiveness. We also excluded participants for having extremely fast (`r too_fast_shapes%>%length()` participants) reaction times (below 100 milliseconds in more than 25% of the trials). Additionally, trials with reaction times below 100 milliseconds (`r (raw_df2%>%filter(RT<100)%>%nrow()/raw_df2%>%filter(RT>0)%>%nrow())%>%printnum()` of all trials) were excluded from the analysis. For the reaction-time analysis in particular, participants with extremely slow (`r too_slow_shapes%>%length()` participants) reaction times (above 9 seconds in more than 25% of the trials) and trials with reaction times above 9 seconds (`r (raw_df2%>%filter(RT>9000)%>%nrow()/raw_df2%>%filter(RT>0)%>%nrow())%>%printnum()`) were also excluded.
+
+Altogether, `r length(intersect(unique(task_df$subj_id), unique(task_df2$subj_id)))` included participants took part in both tasks.
+
+### Hypotheses 
+
+This study is designed to test whether individual differences in the effect of occlusion on perceptual decisions in the absence of the target are correlated with individual differences in the capacity for logical inference, and specifically in modus tollens inference.
+
+#### Part I 
+
+The first part of the study is designed to test the timing of decisions to terminate evidence accumulation in the absence of a target as a function of stimulus occlusion. Therefore, pre-registered hypotheses A1-10 follow the same structure as the ones pre-registered for Exp. 2 in [@mazor_role_2024].
+
+```{r A1, echo=FALSE, cache=TRUE}
+response_RT <- task_df %>%
+  dplyr::filter(RT > 100 & RT < 7000 & correct == TRUE) %>%  
+  dplyr::group_by(subj_id, present) %>%
+  dplyr::summarise(RT = median(RT)) %>%
+  tidyr::pivot_wider(names_from = present, values_from = RT) %>%
+  dplyr::mutate(response_RT = `1` - `0`)
+```
+
+*Hypothesis A1 (PRESENCE/ABSENCE RESPONSE TIME)*: We tested the null hypothesis that response times are similar for target-present and target-absent responses, aiming to replicate the finding that decisions about the target-absence are slower than decisions about target-presence [@mazor_metacognitive_2021]. 
+
+A paired t-test on the median individual-level reaction times from correct trials revealed a significant difference in response times for target-present and target-absent responses (`r apa_print(response_RT%>%pull(response_RT)%>%t.test())$full_result`). 
+
+```{r A2, echo=FALSE, cache=TRUE}
+RT_occlusion_presence <- task_df %>%
+  dplyr::filter(RT > 100 & RT < 7000 & present == 1 & correct == TRUE) %>%
+  dplyr::group_by(subj_id, hide_proportion) %>%
+  dplyr::summarise(RT = median(RT))%>%
+  tidyr::pivot_wider(names_from = hide_proportion, values_from = RT) %>%
+  dplyr::mutate(RT_occlusion_presence = `0.1` - `0.35`)
+t.test(RT_occlusion_presence$RT_occlusion_presence)
+```
+
+*Hypothesis A2 (OCCLUSION EFFECT ON REACTION TIME IN PRESENCE)*: We tested the null hypothesis that target-present response times are similar when 2 and 6 rows of the display are occluded, aiming to replicate the finding that decisions about presence are slower when more of the stimulus is occluded [@mazor_role_2024]. 
+
+A paired t-test on the median individual-level reaction times from correct trials revealed a significant difference in response times between low and high occlusion in target-present decisions (`r apa_print(RT_occlusion_presence%>%pull(RT_occlusion_presence)%>%t.test())$full_result`).
+
+```{r A3, echo=FALSE, cache=TRUE}
+RT_occlusion_absence <- task_df %>%
+  dplyr::filter(RT > 100 & RT < 7000 & present == 0 & correct == TRUE) %>%
+  dplyr::group_by(subj_id, hide_proportion) %>%
+  dplyr::summarise(RT = median(RT)) %>%
+  tidyr::pivot_wider(names_from = hide_proportion, values_from = RT) %>%
+  dplyr::mutate(RT_occlusion_absence = `0.1` - `0.35`)
+t.test(RT_occlusion_absence$RT_occlusion_absence)
+```
+
+*Hypothesis A3 (OCCLUSION EFFECT ON REACTION TIME IN ABSENCE)*: We tested the null hypothesis that target-absent reaction times are similar when 2 or 6 rows are occluded, aiming to replicate the finding that decisions about absence are on average not slower when more of the stimulus is occluded [@mazor_role_2024]. 
+
+A paired t-test on the median individual response times in correct trials revealed a null effect of occlusion on response times in target-absent decisions (`r apa_print(RT_occlusion_absence%>%pull(RT_occlusion_absence)%>%t.test())$full_result`).
+
+```{r A4, echo=FALSE, cache=TRUE}
+RT_occlusion_response <- inner_join(
+  RT_occlusion_presence, 
+  RT_occlusion_absence,
+  by = "subj_id") %>%
+  mutate(RT_occlusion_response = RT_occlusion_presence - RT_occlusion_absence)
+t.test(RT_occlusion_response$RT_occlusion_response)
+```
+
+*Hypothesis A4 (OCCLUSION RESPONSE INTERACTION ON REACTION TIME)*: We tested the null hypothesis that the effect of occlusion on reaction time is similar in target-absent and target-present responses, aiming to replicate the finding that the effect of occlusion on reaction time is different in decisions about presence compared to decisions about absence [@mazor_role_2024]. 
+
+We performed a group-level t-test on a subject-level contrast in correct trials only: $(median(RT_{P,6})-median(RT_{P,2}))-(median(RT_{A,6})-median(RT_{A,2}))$ where where $P$ and $A$ stand for present and absent, and 2 and 6 represent the number of occluded rows.
+
+This revealed a significant interaction (`r apa_print(RT_occlusion_response%>%pull(RT_occlusion_response)%>%t.test())$full_result`).
+
+```{r RT plot, echo=FALSE, fig.cap="Averages of individual-level median response times to low and high occlusion in target-present and target-absent responses (correct trials only).", out.width = '75%'}
+task_df %>%
+    dplyr::filter(RT > 100 & RT < 7000 & correct == TRUE) %>%
+    dplyr::mutate(response = factor(ifelse(response, 'present','absent'),
+                                    levels=c('present','absent')),
+                  hide_proportion <- as.factor(hide_proportion)) %>%
+    dplyr::group_by(subj_id, hide_proportion, response) %>%
+    dplyr::summarise(RT = median(RT)) %>%
+    dplyr::group_by(hide_proportion, response) %>%
+    dplyr::summarise(mean_RT = mean(RT)) %>% # mean of indiv median
+    ggplot(aes(x=hide_proportion, y = mean_RT, color = response)) +
+    geom_point() +
+    geom_line(aes(group = response)) + 
+    labs(x = "Proportion Hidden", 
+         y = "RT (ms)", 
+         color = "Target presence") +
+    scale_color_manual(values = c("absent" = "#E21a1c", "present" = "#377eb8")) +
+    theme_bw()
+```
+
+
+```{r A5, echo=FALSE, cache=TRUE}
+accuracy_occlusion <- task_df %>%
+  dplyr::group_by(subj_id, hide_proportion) %>%
+  dplyr::summarise(
+    hit_rate = (sum(correct & present)+0.5)/(sum(present)+1), 
+    fa_rate = (sum(!correct & !present)+0.5)/(sum(!present)+1),
+    d = qnorm(hit_rate)-qnorm(fa_rate),
+    c = -0.5*(qnorm(hit_rate)+qnorm(fa_rate)))
+
+dprime <- accuracy_occlusion %>%
+  dplyr::select(subj_id, hide_proportion,d) %>%
+  tidyr::pivot_wider(names_from=hide_proportion, values_from=d) %>%
+  dplyr::mutate(dprime_occlusion=`0.1`-`0.35`)
+
+hit_rate_occlusion <- accuracy_occlusion %>%
+  dplyr::select(subj_id,hide_proportion,hit_rate) %>%
+  tidyr::pivot_wider(names_from = hide_proportion, values_from = hit_rate) %>%
+  dplyr::mutate(hit_rate_occlusion = `0.1` - `0.35`)
+
+fa_rate_occlusion <- accuracy_occlusion %>%
+  dplyr::select(subj_id,hide_proportion,fa_rate) %>%
+  tidyr::pivot_wider(names_from = hide_proportion, values_from = fa_rate) %>%
+  dplyr::mutate(fa_rate_occlusion = `0.1` - `0.35`)
+
+```
+
+*Hypothesis A5 (SENSITIVITY)*: We tested the null hypothesis that perceptual sensitivity (measured as $d' = z(H) - z(F)$) is equal as a function of the proportion of hidden pixels. To allow the extraction of $d’$ for participants who committed no false-alarms or misses, we added 0.5 to miss, hit, false-alarm and correct rejection counts [@snodgrass_pragmatics_1988].
+
+We found a significant drop in $d'$ as a function of occlusion (`r apa_print(dprime%>%pull(dprime_occlusion)%>%t.test())$full_result`). This was driven by a significant decrease in hit rate (`r apa_print(hit_rate_occlusion%>%pull(hit_rate_occlusion)%>%t.test())$full_result`) and a smaller but still significant increase in false alarm rate (`r apa_print(fa_rate_occlusion%>%pull(fa_rate_occlusion)%>%t.test())$full_result`). 
+
+```{r Hit/False-alarm plot, echo=FALSE, fig.cap="Average hit and false-alarm rates", out.width = '75%'}
+task_df %>%
+  dplyr::group_by(hide_proportion) %>%
+  dplyr::summarise(
+    hit_rate = (sum(correct & present)) / (sum(present)),
+    fa_rate = (sum(!correct & !present)) / (sum(!present))
+  ) %>%
+  tidyr::pivot_longer(cols = c(hit_rate, fa_rate), names_to = "rate_type", values_to = "rate") %>%
+  ggplot(aes(x = hide_proportion, y = rate, color = rate_type)) +
+    geom_point() +
+    geom_line(aes(group = rate_type)) +
+    labs(x = "Proportion hidden", y = "Rate", color = "Hit / False alarm") +
+    scale_color_manual(values = c("fa_rate" = "#E21a1c", "hit_rate" = "#377eb8")) +
+    theme_bw()
+
+```
+
+
+```{r A6, echo=FALSE, cache=TRUE}
+criterion <- accuracy_occlusion %>%
+  dplyr::select(subj_id, hide_proportion,c) %>%
+  tidyr::pivot_wider(names_from=hide_proportion, values_from=c) %>%
+  dplyr::mutate(criterion_occlusion=`0.1`-`0.35`)
+```
+
+*Hypothesis A6 (CRITERION)*: We tested the null hypothesis that decision criterion (measured as $c=-0.5(z(H)+z(F))$) is unaffected by the proportion of hidden pixels. To allow the extraction of a decision criterion for participants who committed no false-alarms or misses, we added 0.5 to miss, hit, false-alarm and correct rejection counts [@snodgrass_pragmatics_1988].
+
+We found a significantly more conservative criterion in high-occlusion trials (`r apa_print(criterion%>%pull(criterion_occlusion)%>%t.test())$full_result`).
+
+```{r A7, echo=FALSE, cache=TRUE}
+response_confidence <- task_df %>%
+  dplyr::filter(correct == TRUE) %>%
+  dplyr::group_by(subj_id, present) %>%
+  dplyr::summarise(confidence=mean(confidence)) %>%
+  tidyr::pivot_wider(names_from = present, values_from = confidence) %>%
+  dplyr::mutate(response_confidence = `1` - `0`)
+```
+
+*Hypothesis A7 (PRESENCE/ABSENCE CONFIDENCE RATINGS)*: We tested the null hypothesis that confidence ratings are similar for target-present and target-absent responses, aiming to replicate the finding that subjective confidence levels are lower for decisions about absence than decisions about presence [@mazor_metacognitive_2021]. 
+
+A paired t-test on the mean individual-level confidence ratings from correct trials revealed a significant difference in confidence ratings for target-present and target absent responses (`r apa_print(response_confidence%>%pull(response_confidence)%>%t.test())$full_result`).
+
+```{r A8, echo=FALSE, cache=TRUE}
+conf_occlusion_presence <- task_df %>%
+  dplyr::filter(present == 1 & correct == TRUE) %>%
+  dplyr::group_by(subj_id, hide_proportion) %>%
+  dplyr::summarise(confidence = mean(confidence)) %>%
+  tidyr::pivot_wider(names_from = hide_proportion, values_from = confidence) %>%
+  dplyr::mutate(conf_occlusion_presence = `0.1` - `0.35`)
+t.test(conf_occlusion_presence$conf_occlusion_presence)
+```
+
+*Hypothesis A8 (OCCLUSION EFFECT ON CONFIDENCE IN PRESENCE)*: We tested the null hypothesis that target-present confidence ratings are similar when 2 or 6 rows of the display are occluded, aiming to replicate the finding that participants are less confident in decisions about presence when more of the display is occluded [@mazor_role_2024]. 
+
+A paired t-test on the mean individual-level confidence ratings in correct trials revealed a significant difference in confidence ratings for low- and high-occlusion trials in target-present responses (`r apa_print(conf_occlusion_presence%>%pull(conf_occlusion_presence)%>%t.test())$full_result`).
+
+```{r A9, echo=FALSE, cache=TRUE}
+conf_occlusion_absence <- task_df %>%
+  dplyr::filter(present == 0 & correct == TRUE) %>%
+  dplyr::group_by(subj_id, hide_proportion) %>%
+  dplyr::summarise(confidence = mean(confidence)) %>%
+  tidyr::pivot_wider(names_from = hide_proportion, values_from = confidence) %>%
+  dplyr::mutate(conf_occlusion_absence = `0.1` - `0.35`)
+t.test(conf_occlusion_absence$conf_occlusion_absence)
+```
+
+*Hypothesis A9 (OCCLUSION EFFECT ON CONFIDENCE IN ABSENCE)*: We tested the null hypothesis that target-absent confidence ratings are similar when 2 or 6 rows of the display are occluded, aiming to replicate the finding that participants are less confident in decisions about absence when more of the display is occluded [@mazor_role_2024]. 
+
+A paired t-test on the mean individual-level confidence ratings in correct trials revealed a significant difference in confidence ratings for low- and high-occlusion trials in target-absent responses (`r apa_print(conf_occlusion_absence%>%pull(conf_occlusion_absence)%>%t.test())$full_result`).
+
+```{r A10, echo=FALSE, cache=TRUE}
+# occlusion response interaction on confidence 
+conf_occlusion_response <- inner_join(
+  conf_occlusion_presence,
+  conf_occlusion_absence,
+  by = "subj_id") %>%
+  mutate(conf_occlusion_response = conf_occlusion_presence - conf_occlusion_absence)
+t.test(conf_occlusion_response$conf_occlusion_response)
+```
+
+*Hypothesis A10 (OCCLUSION RESPONSE INTERACTION ON CONFIDENCE)*: We tested the null hypothesis that the effect of occlusion on confidence ratings is similar in target-present and target-absent responses, aiming to replicate the finding that the effect of occlusion on subjective confidence levels is similar in decisions about presence and decisions about absence [@mazor_role_2024]. 
+
+We performed a group-level t-test on a subject-level contrast in correct trials only: $(mean(confidence_{P,6}) - mean(confidence_{P,2})) - (mean(confidence_{A,6}) - mean(confidence_{A,2}))$ where $P$ and $A$ stand for present and absent, and 2 and 6 represent the number of occluded rows.
+
+We found a significant interaction effect (`r apa_print(conf_occlusion_response%>%pull(conf_occlusion_response)%>%t.test())$full_result`).
+
+
+```{r Confidence plot, echo=FALSE, fig.cap="Average confidence ratings for low and high-occlusion trials in target presence and absence", out.width = '75%'}
+task_df %>%
+    dplyr::filter(correct == TRUE) %>%
+    dplyr::mutate(response = factor(ifelse(response, 'present','absent'),
+                                    levels=c('present','absent')),
+                  hide_proportion <- as.factor(hide_proportion)) %>%
+    dplyr::group_by(hide_proportion, response) %>%
+    dplyr::summarise(confidence = mean(confidence)) %>%
+    ggplot(aes(x=hide_proportion, y = confidence, color = response)) +
+    geom_point() +
+    geom_line(aes(group = response)) + 
+    labs(x = "Proportion Hidden", 
+         y = "Confidence", 
+         color = "Target presence") +
+    scale_color_manual(values = c("absent" = "#E21a1c", "present" = "#377eb8")) +
+    theme_bw()
+```
+
+
+
+#### Part II
+
+Hypotheses B1-3 test differences in decisions, decision times and decision confidence, as a function of the type of logical inference.
+
+```{r B1, echo=FALSE, cache=TRUE}
+RT_df <- task_df2_RT %>%
+  dplyr::filter(RT > 100 & RT < 9000 & inference_accepted == TRUE) %>%
+  dplyr::select(RT,inference_type,subj_id) %>%
+  dplyr::mutate(subj_id = as.factor(subj_id)) %>%
+  dplyr::group_by(subj_id, inference_type) %>%
+  dplyr::summarise(median_RT = median(RT), .groups = 'drop') 
+
+aov_RT <- aov_ez("subj_id", "median_RT", RT_df, within = "inference_type", na.rm=TRUE)
+
+posthoc_RT <- contrast(emmeans(aov_RT, "inference_type"), method = "pairwise")
+```
+
+*Hypothesis B1 (INFERENCE-TYPE EFFECT ON REACTION TIME)*: We tested the null hypothesis that reaction times are similar for all inference types. 
+
+We performed a one-way ANOVA with four levels (for each of the inference types) on median individual-level reaction times from model-consistent responses only. A response is considered model-consistent if it completes the shape pair to be [circle, triangle] or [non-circle, non-triangle].
+
+This revealed a significant main effect of inference type on reaction time (`r apa_print(summary(aov_RT))$full_result`). 
+
+Furthermore, pairwise comparisons revealed significant differences in response time between all possible inference type pairings except ... (`r apa_print(posthoc_RT)$full_result`).
+
+```{r RT shapes plot, echo=FALSE, fig.cap="Reaction times to each inference type", out.width = '75%'}
+task_df2_RT %>%
+    filter(RT > 100 & RT < 9000 & inference_accepted == TRUE) %>%
+    ggplot(aes(x = factor(inference_type, levels = c("MP", "AC", "DA", "MT")), 
+               y = RT,
+               fill = inference_type)) +
+    geom_boxplot() + 
+    labs(x = "Inference type", y = "RT (ms)") + 
+    theme_bw() +
+    scale_fill_brewer(palette = "Blues") +
+    theme(legend.position = "none")
+
+```
+
+
+```{r B2, echo=FALSE, cache=TRUE}
+conf_df <- task_df2 %>%
+  dplyr::filter(RT > 100 & inference_accepted == TRUE) %>%
+  dplyr::select(confidence,inference_type,subj_id) %>%
+  dplyr::mutate(subj_id = as.factor(subj_id)) %>%
+  dplyr::group_by(subj_id, inference_type) %>%
+  dplyr::summarise(confidence = mean(confidence), .groups = 'drop') 
+
+aov_conf <- aov_ez("subj_id", "confidence", conf_df, within = "inference_type", na.rm=TRUE)
+
+(posthoc_conf <- contrast(emmeans(aov_conf, "inference_type"), method = "pairwise"))
+```
+
+*Hypothesis B2 (INFERENCE-TYPE EFFECT ON CONFIDENCE)*: We tested the null hypothesis that subjective confidence level ratings are similar for all inference types. 
+
+We performed a one-way ANOVA with four levels on mean individual-level confidence ratings from model-consistent responses only. This revealed a significant main effect of inference type on confidence ratings (`r apa_print(summary(aov_conf))$full_result`).
+
+Further pairwise comparisons revealed significant differences in confidence ratings for all possible inference type pairings (`r apa_print(posthoc_conf)$full_result`).
+
+```{r confidence shapes plot, echo=FALSE, fig.cap="Reaction times to each inference type", out.width = '75%'}
+task_df2 %>%
+    dplyr::filter(RT > 100 & inference_accepted == TRUE) %>%
+    dplyr::group_by(subj_id, inference_type) %>%
+    ggplot(aes(x=factor(inference_type, levels = c("MP", "AC", "DA", "MT")),  
+               y=confidence,
+               fill = inference_type))+
+    geom_boxplot(na.rm = TRUE) +
+    labs(x="Inference type", y="Confidence") +
+    theme_bw() +
+    theme(legend.position="none") +
+    scale_fill_brewer(palette = "Blues") 
+
+```
+
+
+```{r B3, echo=FALSE, cache=TRUE}
+prop_df <- task_df2 %>%
+  dplyr::filter(RT > 100) %>%
+  dplyr::select(proportion_accepted,inference_type,subj_id) %>%
+  dplyr::mutate(subj_id = as.factor(subj_id))  
+
+aov_prop <- aov_ez("subj_id", "proportion_accepted", prop_df, within = "inference_type", na.rm=TRUE)
+
+posthoc_prop <- contrast(emmeans(aov_prop, "inference_type"), method = "pairwise")
+```
+
+*Hypothesis B3 (INFERENCE-TYPE EFFECT ON PROPORTION OF MODEL-CONSISTENT RESPONSES)*: We tested the null hypothesis that similar proportions of model-consistent responses  will be given for each inference type. 
+
+We performed a one-way ANOVA with four levels on individual-level proportions of model-consistent responses made per inference type. This revealed a significant main effect of inference type on proportion of model-consistent responses (`r apa_print(summary(aov_prop))$full_result`). 
+
+Further pairwise comparisons revealed significant differences in proportion of model-consistent responses between all inference types (`r apa_print(posthoc_prop)$full_result`).
+
+```{r proportion accepted plot, echo=FALSE, fig.cap="Proportion of model-consistent responses for each inference type.", out.width = '75%'}
+table.proportion_accepted <- task_df2 %>%
+  dplyr::filter(RT > 100) %>%
+  dplyr::select(proportion_accepted, inference_type, subj_id) %>%
+  Rmisc::summarySEwithin(idvar = "subj_id", measurevar = "proportion_accepted", withinvars = "inference_type") # summarySEwithin for SE values
+
+ggplot(data=table.proportion_accepted, 
+       aes(x=factor(inference_type, levels = c("MP", "AC", "DA", "MT")),
+           y=proportion_accepted, 
+           fill=inference_type)) +  
+  geom_bar(stat = "identity", position=position_dodge(.9)) +
+  coord_cartesian(ylim = c(0,1)) +
+  geom_errorbar(aes(ymin=proportion_accepted-se, ymax=proportion_accepted+se), width=.1, linewidth=.5, position=position_dodge(.9)) +
+  labs(x="Inference type", y="Proportion correct", fill = "Inference type") +
+  theme_bw() +
+  theme(legend.position="none") +
+  scale_fill_brewer(palette = "Blues") 
+
+```
+
+#### Part III
+
+Finally, the overarching aim of the study, which we test with Hypotheses C1-C12, is to test whether subjective confidence levels in logical inferences, specifically in Modus Tollens, predict response times in absence of a target as a function of stimulus occlusion. Making a MT inference based on a given conditional (e.g., “If there is a circle on the left, there will be a triangle on the right”), involves observing the negation of the consequent (e.g., the shape on the right is a square) and performing a backwards inference to reach the conclusion that the antecedent must also be false (e.g., the shape on the left is not a circle). One hypothesis is that, similar to MT, in decisions about absence a backwards inference is made from a negative premise (“I am not seeing the target”), by using a conditional (“If the target is present, I would see it”) to ultimately conclude that something is not true (“the target is not absent”). Therefore, participants’ competence in making MT inferences (measured here as their subjective confidence in valid MT inferences relative to other inference types, valid and invalid) could manifest in their perceptual decisions about absence, especially when manipulating the validity of the conditional statement (“If the target is present, I would see it") by occluding parts of the display. 
+
+Unless otherwise specified, only correct responses from part I and model-consistent responses from part II will be included in this set of analyses.
+
+```{r C1, echo=FALSE, cache=TRUE}
+# occlusion effect on RT in absence with confidence contrast MP and MT
+occlusion_RT_absent <- task_df %>%
+  dplyr::filter(RT > 100 & RT < 7000 & correct == TRUE) %>%
+  dplyr::group_by(subj_id) %>%
+  dplyr::summarise(
+    occlusion_RT_absent = (median(RT[present == 0 & hide_proportion == 0.10]) - median(RT[present == 0 & hide_proportion == 0.35])))
+
+MT_MP_conf <- task_df2 %>%
+  dplyr::filter(RT > 100 & inference_accepted == TRUE) %>%
+  dplyr::select(confidence,inference_type,subj_id) %>%
+  dplyr::group_by(subj_id) %>%
+  dplyr::summarise(
+    MT_MP_conf = mean(confidence[inference_type == 'MT']) - mean(confidence[inference_type == 'MP']))
+
+corr_data <- occlusion_RT_absent %>%
+  inner_join(MT_MP_conf, by = "subj_id")
+corr_data <- as.data.frame(corr_data)
+
+corr_MTMP <- cor.test(corr_data$occlusion_RT_absent, corr_data$MT_MP_conf, type = "pearson", na.rm=TRUE)
+```
+
+*Hypothesis C1 (MT-MP CONFIDENCE/OCCLUSION EFFECT ON ABSENCE RT)*: We tested the null hypothesis that there is no association between the difference in subjective confidence in MT versus MP inferences and the effect of occlusion on reaction times in target-absent decisions. We performed a Pearson’s correlation test on the difference between mean individual-level confidence ratings in MT minus MP, with the individual-level difference in median target-absent reaction times in 6- versus 2-row occlusion.
+
+This revealed a null effect (`r apa_print(corr_MTMP)$full_result`). 
+
+```{r C2, echo=FALSE, cache=TRUE}
+# RT difference for positive/negative inferences correlation with RT difference for yes/no responses 
+RT_polarity_shapes <- task_df2_RT %>%
+  dplyr::filter(RT > 100 & RT < 9000 & inference_accepted == TRUE) %>%
+  dplyr::select(RT,inference_type,subj_id) %>%
+  dplyr::group_by(subj_id) %>%
+  dplyr::summarise(
+    pol_shapes = median(RT[inference_type %in% c('MT','DA')]) - median(RT[inference_type %in% c('MP','AC')])
+  ) 
+
+RT_polarity_letters <- task_df %>%
+  dplyr::filter(RT > 100 & RT < 7000 & correct == TRUE) %>%  
+  dplyr::group_by(subj_id, present) %>%
+  dplyr::summarise(RT = median(RT)) %>%
+  tidyr::pivot_wider(names_from = present, values_from = RT) %>%
+  dplyr::mutate(pol_letters = `0` - `1`) # doing this again but the other way around; only just realised we pre-registered a positive correlation so it needs to be negative - positive in both 
+
+corr_data_RT <- RT_polarity_letters %>% 
+  inner_join(RT_polarity_shapes, by = "subj_id") 
+corr_data_RT <- as.data.frame(corr_data_RT) 
+
+corr_polarity <- cor.test(corr_data_RT$pol_letters, corr_data_RT$pol_shapes, type = "pearson", alternative="greater")
+```
+
+*Hypothesis C2 (POLARITY RT CORRELATION)*: We tested the null hypothesis that there is no association between the effect of decision polarity—positive or negative—on reaction times in the two tasks. In the shape-inference task, this was defined as the following contrast on median reaction times: $(MT+AC)-(MT+DA)$. In the letter detection task, polarity was defined as the difference in median reaction times between target-present and target-absent responses. Subject-level contrasts were subjected to a one-sided Pearson correlation test, testing for a positive correlation only. 
+
+This revealed a null effect (`r apa_print(corr_polarity)$full_result`). 
+
+```{r C3, echo=FALSE, cache=TRUE}
+# extract relevant measures from letter detection task 
+occlusion_RT <- task_df %>%
+  dplyr::filter(RT > 100 & RT < 7000 & correct == TRUE) %>%
+  dplyr::group_by(subj_id, present) %>%
+  dplyr::summarise(
+    occlusion_RT = median(RT[hide_proportion == 0.10], na.rm = TRUE) - median(RT[hide_proportion == 0.35], na.rm = TRUE)
+  ) %>%
+  dplyr::ungroup() %>%  #this is acc important bc mean and sd need to be calc over entire dataset 
+  dplyr::mutate(
+    occlusion_RT_z = (occlusion_RT - mean(occlusion_RT, na.rm = TRUE)) / sd(occlusion_RT, na.rm = TRUE)
+  )
+
+occlusion_confidence <- task_df %>%
+  dplyr::filter(correct == TRUE) %>%
+  dplyr::group_by(subj_id, present) %>%
+  dplyr::summarise(
+    occlusion_confidence = mean(confidence[hide_proportion == 0.10], na.rm = TRUE) - mean(confidence[hide_proportion == 0.35], na.rm = TRUE)
+  ) %>%
+  dplyr::ungroup() %>% 
+  dplyr::mutate(
+    occlusion_confidence_z = (occlusion_confidence - mean(occlusion_confidence, na.rm = TRUE)) / sd(occlusion_confidence, na.rm = TRUE)
+  )
+
+occlusion_accuracy <- task_df %>%
+  dplyr::group_by(subj_id, present, hide_proportion) %>%
+  dplyr::summarise(
+    accuracy = sum(!correct)/n(),
+    .groups = 'drop') %>%
+  dplyr::group_by(subj_id, present) %>%
+  dplyr::summarise(
+    occlusion_accuracy = accuracy[hide_proportion == 0.10] - accuracy[hide_proportion == 0.35]
+  ) %>%
+  dplyr::ungroup() %>%
+  dplyr::mutate(
+    occlusion_accuracy_z = (occlusion_accuracy - mean(occlusion_accuracy, na.rm = TRUE)) / sd(occlusion_accuracy, na.rm = TRUE)
+  )
+
+occlusion_df <- occlusion_RT %>%
+  left_join(occlusion_confidence, by = c("subj_id", "present")) %>%
+  left_join(occlusion_accuracy, by = c("subj_id", "present"))
+
+# extract relevant measures from shapes task
+inference_confidence <- task_df2 %>%
+  dplyr::filter(RT > 100 & inference_accepted == TRUE) %>%
+  dplyr::select(confidence,inference_type,subj_id) %>%
+  dplyr::group_by(subj_id) %>%
+  dplyr::summarise(
+    MT = mean(confidence[inference_type == 'MT']) - mean(confidence[inference_type == 'AC']),
+    MP = mean(confidence[inference_type == 'MP']) - mean(confidence[inference_type == 'AC']),
+    DA = mean(confidence[inference_type == 'DA']) - mean(confidence[inference_type == 'AC'])
+  )
+
+# bind together
+analysis_df <- occlusion_df %>%
+  inner_join(inference_confidence, by = "subj_id")
+
+# absent df 
+absent_df <- analysis_df %>% 
+  dplyr::filter(present == 0) 
+
+# regression of occlusion effect on RT in absence as a function of confidence in inference types 
+RT_absent_model <- lm(occlusion_RT_z ~ MP + MT + DA, data = absent_df, na.action=na.omit)
+summary(RT_absent_model)
+
+```
+
+*Hypothesis C3 (INFERENCE CONFIDENCE/OCCLUSION EFFECT ON ABSENCE RT)*: We tested the null hypothesis that confidence ratings in the shape-inference task cannot predict the effect of occlusion on target-absent reaction time in the letter detection task. We tested the significance of individual predictors in a multiple regression with three predictor variables (mean individual-level confidence ratings in MP, MT and DA with AC as baseline) and one outcome variable (median individual-level reaction time difference between 6 and 2-row occlusion in target-absent decisions). 
+
+This revealed that confidence ratings for MP did not significantly predict the effect of occlusion on target-absent reaction times (`r apa_print(summary(RT_absent_model))$full_result$MP`). Neither did confidence ratings for MT (`r apa_print(summary(RT_absent_model))$full_result$MT`). Confidence ratings for DA, however, were a significant predictor of the effect of occlusion on target-absent reaction time (`r apa_print(summary(RT_absent_model))$full_result$DA`), with relatively lower confidence ratings predicting more increase in reaction time as a function occlusion in target absence. 
+
+```{r regression plots, echo=FALSE, fig.cap="Regression lines for MT, MP and DA", out.width = '75%'}
+# make plots 
+plot_predictor <- function(df, predictor) {
+  df <- df %>%
+    dplyr::filter(is.finite(!!sym(predictor)) & is.finite(occlusion_RT_z)) # filter NaN (due to trial exclusions)
+  
+  ggplot(df, aes_string(x = predictor, y = "occlusion_RT_z")) +
+    geom_point() +
+    geom_smooth(method = "lm", se = TRUE, color = "#377eb8", alpha = 0.2) +
+    theme_bw() +
+    labs(x = predictor,
+         y = "Occlusion RT")
+}
+
+# plots for each predictor 
+plot_MP <- plot_predictor(absent_df, "MP")
+plot_MT <- plot_predictor(absent_df, "MT")
+plot_DA <- plot_predictor(absent_df, "DA")
+
+# display in grid 
+grid.arrange(plot_MP, plot_MT, plot_DA, nrow = 1)
+```
+
+
+```{r C4, echo=FALSE, cache=TRUE}
+# regression of occlusion effect on RT in presence as a function of confidence in inference types 
+present_df <- analysis_df %>% 
+  dplyr::filter(present == 1) 
+
+RT_present_model <- lm(occlusion_RT_z ~ MP + MT + DA, data = present_df, na.action=na.omit)
+```
+
+*Hypothesis C4 (INFERENCE CONFIDENCE/OCCLUSION EFFECT ON PRESENCE RT)*: We tested the null hypothesis that confidence ratings in the shape-inference task cannot predict the effect of occlusion on target-present reaction time in the letter detection task. We tested the significance of individual predictors in a multiple regression with three predictor variables (mean individual-level confidence ratings in MP, MT and DA with AC as baseline) and one outcome variable (median individual-level reaction time difference between 6 and 2-row occlusion in target-present decisions). 
+
+This revealed that neither confidence ratings for MP (`r apa_print(summary(RT_present_model))$full_result$MP`), MT (`r apa_print(summary(RT_present_model))$full_result$MT`) nor DA (`r apa_print(summary(RT_present_model))$full_result$DA`) were significant predictors of the effect of occlusion on target-absent reaction time. 
+
+```{r C5, echo=FALSE, cache=TRUE}
+# non-parametric permutation test for present vs absent model for RT 
+get_rsquared_diff_RT <- function(df) {
+  
+  present_df <- df %>% filter(present==1);
+  absent_df <- df %>% filter(present==0);
+  
+  present_model <- lm(occlusion_RT~MP+MT+DA, data=present_df) %>%
+    summary()
+  
+  absent_model <- lm(occlusion_RT~MP+MT+DA, data=absent_df) %>%
+    summary()
+  
+  return(absent_model$r.squared-present_model$r.squared)
+}
+
+shuffle_present <- function(df) {
+  new_df <- df %>%
+    dplyr::group_by(subj_id) %>%
+    dplyr::mutate(flip = rbinom(1,1,0.5),
+                  old_present = present,
+                  present = ifelse(flip, as.integer(!present),present))
+  return(new_df)
+}
+
+true_difference_RT <- get_rsquared_diff_RT(analysis_df);
+
+N = 5000; #number of permutations
+null_dist_RT = c();
+
+for (i in 1:N) {
+  shuffled_df <- shuffle_present(analysis_df);
+  shuffled_diff_RT <- get_rsquared_diff_RT(shuffled_df);
+  null_dist_RT = c(null_dist_RT, shuffled_diff_RT);
+}
+
+p_value_RT_confirmation <- mean(abs(true_difference_RT)<=abs(null_dist_RT))
+
+p_value_RT_confirmation <- round(p_value_RT_confirmation, 3)
+```
+
+*Hypothesis C5 (RT PREDICTION: GOODNESS OF FIT)*: We tested the null hypothesis that subjective confidence levels for inference-types predict similar proportions of variance in occlusion effects on reaction time in target-absent and target-present decisions. 
+
+We performed a non-parametric permutation test, which revealed a non-significant difference in goodness of fit, p = `r printnum(p_value_RT)`
+
+```{r C6, echo=FALSE, cache=TRUE}
+# confidence in absent
+conf_absent_model <- lm(occlusion_confidence_z ~ MP + MT + DA, data = absent_df, na.action=na.omit)
+```
+
+*Hypothesis C6 (INFERENCE CONFIDENCE/OCCLUSION EFFECT ON ABSENCE CONFIDENCE)*: We tested the null hypothesis that confidence ratings in the shape-inference task cannot predict the effect of occlusion on target-absent confidence in the letter detection task. We tested the significance of individual predictors in a multiple regression with three predictor variables (mean individual-level confidence ratings in MP, MT and DA with AC as baseline) and one outcome variable (mean individual-level reaction time difference between 6 and 2-row occlusion in target-absent decisions). 
+
+We found that confidence ratings for MP and MT did not significantly predict the effect of occlusion on confidence in absence (`r apa_print(summary(conf_absent_model))$full_result$MP` and `r apa_print(summary(conf_absent_model))$full_result$MT` respectively). However, confidence ratings for DA was a significant predictor (`r apa_print(summary(conf_absent_model))$full_result$DA`). 
+
+```{r C7, echo=FALSE, cache=TRUE}
+# confidence in present
+conf_present_model <- lm(occlusion_confidence_z ~ MP + MT + DA, data = present_df, na.action=na.omit)
+```
+
+*Hypothesis C7 (INFERENCE CONFIDENCE/OCCLUSION EFFECT ON PRESENCE CONFIDENCE)*: We tested the null hypothesis that confidence ratings in the shape-inference task cannot predict the effect of occlusion on target-present confidence in the letter detection task. We will test the significance of individual predictors in a multiple regression with three predictor variables (mean individual-level confidence ratings in MP, MT and DA with AC as baseline) and one outcome variable (mean individual-level reaction time difference between 6 and 2-row occlusion in target-present decisions). 
+
+We found that confidence ratings for MP (`r apa_print(summary(conf_present_model))$full_result$MP`), MT (`r apa_print(summary(conf_present_model))$full_result$MT`) and DA (`r apa_print(summary(conf_present_model))$full_result$DA`) could not predict the effect of occlusion on confidence in target-present decisions. 
+
+```{r C8, echo=FALSE, cache=TRUE}
+# permutation test
+get_rsquared_diff_conf <- function(df) {
+  
+  present_df <- df %>% filter(present==1);
+  absent_df <- df %>% filter(present==0);
+  
+  present_model <- lm(occlusion_confidence~MP+MT+DA, data=present_df) %>% summary()
+  absent_model <- lm(occlusion_confidence~MP+MT+DA, data=absent_df) %>% summary()
+  
+  return(absent_model$r.squared-present_model$r.squared)
+}
+
+true_difference_conf <- get_rsquared_diff_conf(analysis_df);
+
+N = 5000; #number of permutations
+null_dist_conf = c();
+
+for (i in 1:N) {
+  shuffled_df <- shuffle_present(analysis_df);
+  shuffled_diff_conf <- get_rsquared_diff_conf(shuffled_df);
+  null_dist_conf = c(null_dist_conf, shuffled_diff_conf);
+}
+
+p_value_conf <- mean(abs(true_difference_conf)<=abs(null_dist_conf))
+```
+
+*Hypothesis C8 (CONFIDENCE PREDICTION: GOODNESS OF FIT)*: We tested the null hypothesis that subjective confidence levels for inference-types predict similar proportions of variance in occlusion effects on confidence ratings in target-absent and target-present decisions. 
+
+A non-parametric permutation test revealed a non-significant difference in goodness of fit of the two models (*p* = `r printnum(p_value_conf)`). 
+
+```{r C9, echo=FALSE, cache=TRUE}
+# false alarm rate
+accuracy_absent_model <- lm(occlusion_accuracy_z ~ MP + MT + DA, data = absent_df, na.action=na.omit)
+```
+
+*Hypothesis C9 (INFERENCE CONFIDENCE/OCCLUSION EFFECT ON FALSE ALARM RATE):* We tested the null hypothesis that confidence ratings in the shape-inference task cannot predict the effect of occlusion on the false alarm rate in the letter detection task. We tested the significance of individual predictors in a multiple regression with three predictor variables (mean individual-level confidence ratings in MP, MT and DA with AC as baseline) and one outcome variable (the difference in the false alarm rate between 6 and 2-row occlusion). 
+
+We found that confidence ratings in MP (`r apa_print(summary(accuracy_absent_model))$full_result$MP`), MT (`r apa_print(summary(accuracy_absent_model))$full_result$MT`) and DA (`r apa_print(summary(accuracy_absent_model))$full_result$DA`) could not predict the effect of occlusion on false alarm rate. 
+
+```{r C10, echo = FALSE, cache=TRUE}
+# miss rate
+accuracy_present_model <- lm(occlusion_accuracy_z ~ MP + MT + DA, data = present_df, na.action=na.omit)
+```
+
+*Hypothesis C10 (INFERENCE CONFIDENCE/OCCLUSION EFFECT ON MISS RATE)*: We tested the null hypothesis that confidence ratings in the shape-inference task cannot predict the effect of occlusion on the miss rate in the letter detection task. We tested the significance of individual predictors in a multiple regression with three predictor variables (mean individual-level confidence ratings in MP, MT and DA with AC as baseline) and one outcome variable (the difference in the miss rate between 6 and 2-row occlusion).
+
+We found that confidence ratings in MP (`r apa_print(summary(accuracy_present_model))$full_result$MP`), MT (`r apa_print(summary(accuracy_present_model))$full_result$MT`) and DA (`r apa_print(summary(accuracy_present_model))$full_result$DA`) could not predict the effect of occlusion on miss rate. 
+
+```{r C11, echo = FALSE, cache = TRUE}
+# permutation 
+get_rsquared_diff_accuracy <- function(df) {
+  
+  present_df <- df %>% filter(present==1);
+  absent_df <- df %>% filter(present==0);
+  
+  present_model <- lm(occlusion_accuracy~MP+MT+DA, data=present_df) %>% summary()
+  absent_model <- lm(occlusion_accuracy~MP+MT+DA, data=absent_df) %>% summary()
+  
+  return(absent_model$r.squared-present_model$r.squared)
+}
+
+true_difference_accuracy <- get_rsquared_diff_accuracy(analysis_df);
+
+N = 5000; 
+null_dist_accuracy = c();
+
+for (i in 1:N) {
+  shuffled_df <- shuffle_present(analysis_df);
+  shuffled_diff_accuracy <- get_rsquared_diff_accuracy(shuffled_df);
+  null_dist_accuracy = c(null_dist_accuracy, shuffled_diff_accuracy);
+}
+
+p_value_accuracy <- mean(abs(true_difference_accuracy)<=abs(null_dist_accuracy))
+```
+
+*Hypothesis C11 (ERROR RATE PREDICTION: GOODNESS OF FIT)*: We tested the null hypothesis that subjective confidence levels for inference-types predict similar proportions of variance in occlusion effects on false alarm and miss rates. 
+
+A non-parametric permutation test revealed a non-significant difference in goodness of fit of the two models (*p* = `r printnum(p_value_accuracy)`). 
+
+```{r C12, echo=FALSE, cache=TRUE}
+# extract star trials 
+raw_star_df <- df2 %>%
+  dplyr::filter(trial_type=='jsShapes' & rare_option == 'true') %>%
+  dplyr::select(PROLIFIC_PID,shapes,occluder,options,response,RT,confidence) %>%
+  dplyr::rename(subj_id=PROLIFIC_PID) %>%
+  dplyr::mutate(decision=ifelse(response==0,as.numeric(substr(options,2,2)),as.numeric(substr(options,4,4))),
+                RT=as.numeric(RT),
+                confidence=as.numeric(confidence)) %>%
+  dplyr::mutate(
+    MT_accepted = case_when(
+      decision == 5 ~ TRUE,
+      decision == 0 ~ FALSE)
+  )
+
+star_df <- raw_star_df %>%
+  filter(!(subj_id %in% to_exclude_shapes) & RT > 100) # apply same participant exclusions 
+
+merged_df <- star_df %>%
+  inner_join(occlusion_RT_absent, by = "subj_id")
+
+group_A <- merged_df %>%
+  filter(MT_accepted == TRUE) %>%
+  pull(occlusion_RT_absent)
+
+group_B <- merged_df %>%
+  filter(MT_accepted == FALSE) %>%
+  pull(occlusion_RT_absent)
+```
+
+*Hypothesis C12 (STAR TRIAL/OCCLUSION EFFECT ON ABSENCE RT)*: We tested the null hypothesis that occlusion effects on reaction time in target-absent decisions are similar in participants who choose the star shape and participants who choose the circle shape in the final question. 
+
+A group-level t-test revealed a non-significant difference in the effect of occlusion on reaction time in absence for the two groups (`r apa_print(t.test(group_A, group_B))$full_result`). 
+
+
+\newpage
+
+# References 
+
+\begingroup
+\setlength{\parindent}{-0.5in}
+\setlength{\leftskip}{0.5in}
+
+<div id="refs" custom-style="Bibliography"></div>
+\endgroup
